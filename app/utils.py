@@ -3,7 +3,6 @@ from datetime import datetime
 import pandas as pd
 import datetime
 import re
-from firebase_config import firebase_config
 import pyrebase
 import firebase_admin
 from app.firebase_config import firebase_config
