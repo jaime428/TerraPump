@@ -6,7 +6,7 @@ import re
 from firebase_config import firebase_config
 import pyrebase
 import firebase_admin
-from firebase_admin import credentials, firestore
+from app.firebase_config import firebase_config
 
 # Firebase Admin SDK (server-side)
 if not firebase_admin._apps:
