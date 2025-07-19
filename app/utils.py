@@ -1,22 +1,24 @@
 import streamlit as st
-from datetime import datetime
-import pandas as pd
 import datetime
+import pandas as pd
 import re
 import pyrebase
 import firebase_admin
-from app.firebase_config import firebase_config
+from firebase_admin import credentials, firestore
+from app import firebase_config
 
-# Firebase Admin SDK (server-side)
+# ✅ Initialize Firebase Admin SDK using secrets (not file path)
 if not firebase_admin._apps:
-    cred = credentials.Certificate("secrets/credentials.json")
+    cred = credentials.Certificate(dict(st.secrets["firebase"]))
     firebase_admin.initialize_app(cred)
 
+# ✅ Get Firestore client
 db = firestore.client()
 
-# Firebase client-side (for pyrebase auth)
-firebase = pyrebase.initialize_app(firebase_config)
+# ✅ Initialize pyrebase (client-side auth)
+firebase = pyrebase.initialize_app(firebase_config.firebase_config)
 auth = firebase.auth()
+
 
 def hide_sidebar():
     st.markdown(
