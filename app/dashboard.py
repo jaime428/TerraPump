@@ -27,6 +27,17 @@ if not firebase_admin._apps:
     cred = credentials.Certificate(dict(st.secrets["firebase"]))
     firebase_admin.initialize_app(cred)
 
+@st.cache_data
+def build_series_dict(df: pd.DataFrame):
+    dates = pd.to_datetime(df['Date']).dt.normalize()
+    return {
+        key: (
+            df.assign(_dt=dates)
+              .set_index('_dt')[key]
+              .pipe(pd.to_numeric, errors='coerce')
+        )
+        for key in ["Weight", "Calories", "Protein", "Steps"]
+    }
 
 # --- Dashboard Tab ---
 def tab_dashboard(data: pd.DataFrame):
