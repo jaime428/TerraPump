@@ -3,9 +3,8 @@ import datetime
 import pandas as pd
 import altair as alt
 import numpy as np
-from app.firebase_config import db, auth
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials
 from app.utils import (
     fetch_all_entries,
     get_day_value,
@@ -13,29 +12,14 @@ from app.utils import (
     hide_sidebar,
     show_login_page,
     show_signup_page,
-    get_day_name,
-    slugify
+    get_day_name
 )
 
-# Initialize Firebase Admin SDK
+# ✅ Initialize Firebase Admin SDK using Streamlit secrets
 if not firebase_admin._apps:
-    cred = credentials.Certificate(
-        "data/terrapump-e86f6-firebase-adminsdk-fbsvc-adb5f6bdd4.json"
-    )
+    cred = credentials.Certificate(dict(st.secrets["firebase"]))
     firebase_admin.initialize_app(cred)
 
-# Helper: build time-indexed series dict
-@st.cache_data
-def build_series_dict(df: pd.DataFrame):
-    dates = pd.to_datetime(df['Date']).dt.normalize()
-    return {
-        key: (
-            df.assign(_dt=dates)
-              .set_index('_dt')[key]
-              .pipe(pd.to_numeric, errors='coerce') 
-        )
-        for key in ["Weight", "Calories", "Protein", "Steps"]
-    }
 
 # --- Dashboard Tab ---
 def tab_dashboard(data: pd.DataFrame):
