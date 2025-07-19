@@ -3,10 +3,10 @@ import datetime
 import pandas as pd
 import altair as alt
 import numpy as np
-from firebase_config import db, auth
+from app.firebase_config import db, auth
 import firebase_admin
 from firebase_admin import credentials, firestore
-from utils import (
+from app.utils import (
     fetch_all_entries,
     get_day_value,
     clear_entry_state,
