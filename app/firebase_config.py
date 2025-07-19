@@ -12,14 +12,15 @@ db = firestore.client()
 
 # --- Pyrebase client-side config (used for login/auth) ---
 firebase_config = {
-    "apiKey": st.secrets["firebase_apiKey"],
-    "authDomain": st.secrets["firebase_authDomain"],
+    "apiKey": st.secrets["firebase"]["apiKey"],
+    "authDomain": st.secrets["firebase"]["authDomain"],
+    "databaseURL": st.secrets["firebase"]["databaseURL"],
     "projectId": st.secrets["firebase"]["project_id"],
-    "storageBucket": st.secrets["firebase_storageBucket"],
-    "messagingSenderId": st.secrets["firebase_messagingSenderId"],
-    "appId": st.secrets["firebase_appId"],
-    "measurementId": st.secrets["firebase_measurementId"]
+    "storageBucket": st.secrets["firebase"]["storageBucket"],
+    "messagingSenderId": st.secrets["firebase"]["messagingSenderId"],
+    "appId": st.secrets["firebase"]["appId"],
 }
+
 
 firebase = pyrebase.initialize_app(firebase_config)
 auth = firebase.auth()
