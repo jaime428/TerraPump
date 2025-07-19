@@ -5,7 +5,7 @@ import altair as alt
 import numpy as np
 import firebase_admin
 from firebase_admin import credentials
-from app.utils import (
+from utils import (
     fetch_all_entries,
     get_day_value,
     clear_entry_state,
@@ -14,6 +14,7 @@ from app.utils import (
     show_signup_page,
     get_day_name
 )
+from firebase_config import db, auth
 
 # ✅ Initialize Firebase Admin SDK using Streamlit secrets
 if not firebase_admin._apps:
