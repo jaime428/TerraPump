@@ -1,0 +1,22 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Firebase & credentials
+secrets/
+app/firebase_config.py
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Local env variables
+.env
+
+# Streamlit
+.streamlit/
+
+# OS-specific
+.DS_Store
+Thumbs.db
