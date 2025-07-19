@@ -1,4 +1,4 @@
-APP_VERSION = "0.4"
+APP_VERSION = "0.42"
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -17,16 +17,14 @@ from app.utils import (
     hide_sidebar,
     show_login_page,
     show_signup_page,
-    get_day_name
+    get_day_name,
+    slugify
 )
-
+from firebase_admin import firestore
 from app.firebase_config import db, auth
 
 
 # ✅ Initialize Firebase Admin SDK using Streamlit secrets
-if not firebase_admin._apps:
-    cred = credentials.Certificate(dict(st.secrets["firebase"]))
-    firebase_admin.initialize_app(cred)
 
 @st.cache_data
 def build_series_dict(df: pd.DataFrame):
@@ -43,16 +41,21 @@ def build_series_dict(df: pd.DataFrame):
 # --- Dashboard Tab ---
 def tab_dashboard(data: pd.DataFrame):
     # Workout state initialization
+    for key in ["Weight", "Calories", "Protein", "Steps"]:
+        if key not in data.columns:
+            data[key] = 0
+    # now safe to build series
+    series = build_series_dict(data)
+
     st.session_state.setdefault('workout_log', [])
     st.session_state.setdefault('workout_started', False)
     st.session_state.setdefault('workout_start_time', None)
 
     # Header
-    st.markdown("<h1 style='text-align:center;'>TerraPump (Beta v0.2)</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>TerraPump</h1>", unsafe_allow_html=True)
     st.markdown("---")
 
     # Prepare series
-    series = build_series_dict(data)
     dates = series['Weight'].index
     today = dates.max()
     yesterday = today - pd.Timedelta(days=1)
@@ -118,7 +121,7 @@ def tab_dashboard(data: pd.DataFrame):
 
         # 1) Pick exercise type → determine `ex`
         ex_type = st.selectbox("Exercise type",
-            ["Bodyweight","Barbell","Dumbbell","Machine","Plate-loaded"], index=3)
+            ["Bodyweight","Barbell","Cable", "Dumbbell","Machine","Plate-loaded"], index=3)
 
         ex = ""
         default_wt = 0.0
@@ -153,6 +156,7 @@ def tab_dashboard(data: pd.DataFrame):
                 st.info(f"💡 Default starting weight for **{ex}**: {default_wt} lbs")
             else:
                 default_wt = 0.0
+                ex = st.text_input("Exercise name", key="free_ex_name")
 
             # slug & fetch stats
             if ex:
@@ -261,6 +265,7 @@ def tab_dashboard(data: pd.DataFrame):
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
+
 # --- Entries Tab ---
 def tab_entries(_):
     st.title("Add or Edit Entries")
@@ -278,8 +283,13 @@ def tab_entries(_):
         st.error(f"Error loading data: {e}")
         return
 
-    if not df.empty:
-        df["DateNorm"] = pd.to_datetime(df["Date"]).dt.normalize()
+    needed = ["Date", "Weight", "Calories", "Protein", "Carbs", "Fats", "Steps", "Training", "Cardio"]
+    for col in needed:
+        if col not in df.columns:
+            df[col] = np.nan  # or 0 for numeric ones if you prefer
+
+    # now normalize dates
+    df["DateNorm"] = pd.to_datetime(df["Date"], errors="coerce").dt.normalize()
 
     form_date = st.date_input("Date", value=datetime.date.today(), on_change=clear_entry_state)
     row = df[df.get("DateNorm").dt.date == form_date]
@@ -322,7 +332,7 @@ def tab_entries(_):
             "Cardio": cardio,
             "timestamp": firestore.SERVER_TIMESTAMP
         }
-        if weight > 0: payload["Weight"] = weight
+        payload["Weight"] = weight
         date_id = str(form_date)
         try:
             db.collection("users").document(user_id).collection("entries").document(date_id).set(payload)
@@ -336,6 +346,15 @@ def tab_graphs(data: pd.DataFrame):
     st.title("Insights & Calendar")
     st.markdown("---")
 
+    for key in ["Weight", "Calories", "Protein", "Steps"]:
+        if key not in data.columns:
+            data[key] = 0
+
+    if data.empty or "Date" not in data.columns:
+        st.info("No data yet. Use the Entries tab to log your first workout or daily stats.")
+        st.markdown("---")
+        return
+    
     # Weight over time
     wdf = data.assign(
         DateNorm=pd.to_datetime(data['Date']).dt.normalize(),
@@ -374,8 +393,9 @@ def tab_graphs(data: pd.DataFrame):
     st.markdown("---")
 
 # --- About Tab ---
-def tab_about():
+def tab_about(_=None):
     st.title("👨‍💻 About the Developer")
+    st.markdown("---")
     st.markdown(
          """
         ### Jaime Cruz
@@ -400,7 +420,7 @@ def main():
     st.set_page_config(page_title="TerraPump", page_icon=":bar_chart:", layout="wide")
     st.sidebar.caption(f"Version {APP_VERSION}")
     st.markdown("""
-        <style>
+        <style>P
         [data-testid="stSidebar"] {background-color:#111; padding-top:2rem;}
         [data-testid="stSidebar"] button {background:#222; color:#fff; margin:5px 0;}
         [data-testid="stSidebar"] button:hover {background:#BB0000;}
@@ -427,17 +447,21 @@ def main():
 
 
     # Sidebar navigation
-    st.sidebar.title("TerraPump")
-    for icon,label in [("🏋️","Dashboard & Workout"),("📋","Entries"),("📈","Graphs"),("🙋","About")]:
+    for icon,label in [
+        ("🏋️","Dashboard & Workout"),
+        ("📋","Entries"),
+        ("📈","Graphs"),
+        ("🙋","About")
+    ]:
         if st.sidebar.button(f"{icon} {label}"):
             st.session_state.page = label
 
     # Route to tab
     pages = {
-        "Dashboard & Workout": tab_dashboard,
-        "Entries": tab_entries,
-        "Graphs": tab_graphs,
-        "About": tab_about
+    "Dashboard & Workout": tab_dashboard,
+    "Entries":             tab_entries,
+    "Graphs":              tab_graphs,
+    "About":               tab_about
     }
     pages.get(st.session_state.page, tab_dashboard,)(data)
 
