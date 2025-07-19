@@ -2,6 +2,13 @@
 
 **TerraPump** is a web-based fitness tracking app built with **Streamlit** and **Firebase**, designed to help users log their workouts, track physical progress, and visualize health stats all in one sleek dashboard.
 
+## 📦 Version History
+
+- **v0.4** – Deployed working login, Firestore integration, and dynamic workout tracker. About Me tab added.
+- **v0.3** – Streamlit UI overhauled; graphs cleaned up; Firebase structure updated.
+- **v0.2** – Form input and entry logging connected to Firestore.
+- **v0.1** – Initial Streamlit and Firebase setup with basic form layout.
+
 ---
 
 ## 🌟 Features
