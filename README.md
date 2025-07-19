@@ -17,10 +17,20 @@
 
 ---
 
+🧪 **Currently in Beta**  
+Version: **v0.4 Beta**  
+Planned improvements include:
+- Cardio & superset logging  
+- Progress PRs & historical suggestions  
+- UI polish and mobile-friendly layout  
+- Bug fixes & form validation
+
+
 ## 🚀 Live App
 
-**🔗 Coming Soon**: TerraPump will be live on Streamlit Cloud. Link will go here:
-
+TerraPump will be live on Streamlit Cloud. Link will go here:
+https://terrapump.streamlit.app/
+*(Make sure you're logged into the right account to access it.)*
 
 ---
 
@@ -53,3 +63,22 @@ pip install -r requirements.txt
 
 # 5. Run the app
 streamlit run app/dashboard.py
+
+
+---
+
+### 👤 Developer
+
+**Jaime Cruz**  
+📧 jaimecruz428@gmail.com  
+🔗 [LinkedIn](https://www.linkedin.com/in/jaimecruz428/)  
+🌐 GitHub: [@jaime428](https://github.com/jaime428)
+
+---
+
+### 🛑 Disclaimer
+
+This is a student-built project in early development. Data may not persist between sessions. Please don’t use sensitive personal info. More features and polish coming soon.
+
+---
+

@@ -1,3 +1,4 @@
+APP_VERSION = "0.4"
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -373,15 +374,31 @@ def tab_graphs(data: pd.DataFrame):
     st.markdown("---")
 
 # --- About Tab ---
-def tab_about(data):
-    st.title("About Me")
-    st.markdown("---")
-    st.write("Hello")
+def tab_about():
+    st.title("👨‍💻 About the Developer")
+    st.markdown(
+         """
+        ### Jaime Cruz
+        **Sophomore @ University of Maryland**  
+        Studying **Information Science**, passionate about building useful tools for fitness and student productivity.
+
+         #### 🔧 About TerraPump
+        TerraPump is a personal fitness tracker designed for students and gym-goers.  
+        It helps track daily stats like weight, calories, steps, and workouts – with Firebase-backed authentication and real-time data.
+
+        #### 🌐 Links
+        - [GitHub](https://github.com/jaime428)
+        - [LinkedIn](https://www.linkedin.com/in/jaimecruz428/)
+
+        _Thanks for checking out my project!_
+        """
+    )
 
 # --- Main ---
 def main():
     # Page config & sidebar styling
     st.set_page_config(page_title="TerraPump", page_icon=":bar_chart:", layout="wide")
+    st.sidebar.caption(f"Version {APP_VERSION}")
     st.markdown("""
         <style>
         [data-testid="stSidebar"] {background-color:#111; padding-top:2rem;}
