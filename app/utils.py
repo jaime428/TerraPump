@@ -5,7 +5,7 @@ import re
 import pyrebase
 import firebase_admin
 from firebase_admin import credentials, firestore
-from app.firebase_config import db, auth
+import firebase_config
 
 # ✅ Initialize Firebase Admin SDK using secrets (not file path)
 if not firebase_admin._apps:
