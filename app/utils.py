@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 import re
 
-from .firebase_config import auth, db  # ✅ import initialized auth and db
+from .firebase_config import auth, db
 
 # --- Sidebar Styling ---
 def hide_sidebar():
@@ -22,12 +22,11 @@ def show_login_page():
     pw    = st.text_input("Password", type="password")
     if st.button("Log in"):
         try:
-            user = client_auth.sign_in_with_email_and_password(email, pw)
+            user = auth.sign_in_with_email_and_password(email, pw)
             st.session_state.user = user
             st.success("✅ Logged in!")
         except Exception as e:
-            err = e.args[0]
-            st.error(f"Login failed: {err}")
+            st.error(f"Login failed: {e}")
 
 # --- Signup UI ---
 def show_signup_page():
