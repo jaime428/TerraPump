@@ -1,4 +1,5 @@
 import streamlit as st
+from app.firebase_config import client_auth, db
 import datetime
 import pandas as pd
 import re
@@ -15,25 +16,19 @@ def hide_sidebar():
     """, unsafe_allow_html=True)
 
 # --- Login UI ---
+
 def show_login_page():
     st.title("Login")
-    email = st.text_input("Email", key="login_email")
-    password = st.text_input("Password", type="password", key="login_password")
-    
-    if st.button("Log In"):
+    email = st.text_input("Email")
+    pw    = st.text_input("Password", type="password")
+    if st.button("Log in"):
         try:
-            user = auth.sign_in_with_email_and_password(email, password)
-            st.session_state.logged_in = True
-            st.session_state.uid = user['localId']
-            st.session_state.page = "Dashboard & Workout"
-            st.success("Logged in successfully!")
-            st.rerun()
-        except Exception:
-            st.error("Login failed. Check your credentials.")
-
-    if st.button("Create an account"):
-        st.session_state.page = "signup"
-        st.rerun()
+            user = client_auth.sign_in_with_email_and_password(email, pw)
+            st.session_state.user = user
+            st.success("✅ Logged in!")
+        except Exception as e:
+            err = e.args[0]
+            st.error(f"Login failed: {err}")
 
 # --- Signup UI ---
 def show_signup_page():
