@@ -8,7 +8,6 @@ import datetime
 import pandas as pd
 import altair as alt
 import numpy as np
-import firebase_admin
 from firebase_admin import credentials
 from app.utils import (
     fetch_all_entries,

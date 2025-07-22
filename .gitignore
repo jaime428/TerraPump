@@ -20,3 +20,7 @@ env/
 # OS-specific
 .DS_Store
 Thumbs.db
+
+
+# Streamlit secrets (local development only)
+.streamlit/secrets.toml
