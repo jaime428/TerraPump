@@ -28,14 +28,13 @@ def show_login_page():
             st.session_state.user = user
             st.session_state.page = "dashboard"
             st.success("✅ Logged in!")
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"Login failed: {e}")
 
-    st.write("Don't have an account?")
     if st.button("Sign Up"):
         st.session_state.page = "signup"
-        st.experimental_rerun()
+        st.rerun()
 
 # --- Signup UI ---
 
@@ -53,14 +52,13 @@ def show_signup_page():
                 user = auth.create_user_with_email_and_password(email, password)
                 st.success("Account created! Please log in.")
                 st.session_state.page = "login"
-                st.experimental_rerun()
+                st.rerun()
             except Exception as e:
                 st.error(f"Signup failed: {e}")
 
-    st.write("Already have an account?")
     if st.button("Back to Login"):
         st.session_state.page = "login"
-        st.experimental_rerun()
+        st.ererun()
 
 # --- Firestore Entry Fetching ---
 
