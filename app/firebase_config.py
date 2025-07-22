@@ -16,10 +16,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 
-# ————————————— Client SDK (user auth) —————————————
-# grab your web-config from the [firebase] block in secrets.toml
-pb_cfg = st.secrets["firebase"]
-# initialize the Pyrebase app
-_pyfb = pyrebase.initialize_app(pb_cfg)
-# this is what you should use in your login page
+pb_cfg      = st.secrets["firebase"]
+_pyfb       = pyrebase.initialize_app(pb_cfg)
 client_auth = _pyfb.auth()
+
