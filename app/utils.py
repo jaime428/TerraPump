@@ -48,6 +48,14 @@ def show_signup_page():
         else:
             try:
                 user = auth.create_user_with_email_and_password(email, password)
+                uid = user["localId"]
+
+                # ✨ Write profile metadata ✨
+                db.collection("users").document(uid).set({
+                    "email":      email,
+                    "created_at": firestore.SERVER_TIMESTAMP
+                })
+
                 st.success("Account created! Please log in.")
                 st.session_state.page = "login"
                 st.rerun()

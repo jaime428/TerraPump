@@ -320,18 +320,22 @@ def tab_entries(_):
 
     if submit:
         payload = {
-            "Date": str(form_date),
-            "SleepHours": round(sleep_h + sleep_m/60, 2),
-            "Calories": calories,
-            "Protein": protein,
-            "Carbs": carbs,
-            "Fats": fats,
-            "Steps": steps,
-            "Training": training,
-            "Cardio": cardio,
-            "timestamp": firestore.SERVER_TIMESTAMP
+            "Date":        str(form_date),
+            "SleepHours":  round(sleep_h + sleep_m/60, 2),
+            "Calories":    calories,
+            "Protein":     protein,
+            "Carbs":       carbs,
+            "Fats":        fats,
+            "Steps":       steps,
+            "Training":    training,
+            "Cardio":      cardio,
+
+            # ✨ new fields ✨
+            "email":       st.session_state.user.get("email"),        # or fetch via auth.get_account_info(...)
+            "created_at":  firestore.SERVER_TIMESTAMP,
+            "timestamp":   firestore.SERVER_TIMESTAMP,
+            "Weight":      weight
         }
-        payload["Weight"] = weight
         date_id = str(form_date)
         try:
             db.collection("users").document(user_id).collection("entries").document(date_id).set(payload)
