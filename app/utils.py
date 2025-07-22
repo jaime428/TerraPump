@@ -1,5 +1,4 @@
 import streamlit as st
-from app.firebase_config import client_auth, db
 import datetime
 import pandas as pd
 import re
