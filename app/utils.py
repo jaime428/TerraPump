@@ -6,6 +6,7 @@ import re
 from .firebase_config import auth, db
 
 # --- Sidebar Styling ---
+
 def hide_sidebar():
     st.markdown("""
         <style>
@@ -18,42 +19,51 @@ def hide_sidebar():
 
 def show_login_page():
     st.title("Login")
-    email = st.text_input("Email")
-    pw    = st.text_input("Password", type="password")
+    email = st.text_input("Email", key="login_email")
+    pw = st.text_input("Password", type="password", key="login_password")
+
     if st.button("Log in"):
         try:
             user = auth.sign_in_with_email_and_password(email, pw)
             st.session_state.user = user
+            st.session_state.page = "dashboard"
             st.success("✅ Logged in!")
+            st.experimental_rerun()
         except Exception as e:
             st.error(f"Login failed: {e}")
 
+    st.write("Don't have an account?")
+    if st.button("Sign Up"):
+        st.session_state.page = "signup"
+        st.experimental_rerun()
+
 # --- Signup UI ---
+
 def show_signup_page():
     st.title("Sign Up")
     email = st.text_input("Email", key="signup_email")
     password = st.text_input("Password", type="password", key="signup_password")
     confirm = st.text_input("Confirm Password", type="password", key="signup_confirm")
 
-    if st.button("Sign Up"):
+    if st.button("Create Account"):
         if password != confirm:
             st.error("Passwords do not match.")
         else:
             try:
                 user = auth.create_user_with_email_and_password(email, password)
                 st.success("Account created! Please log in.")
-                st.session_state.logged_in = True
-                st.session_state.uid = user['localId']
-                st.session_state.page = "Dashboard & Workout"
-                st.rerun()
-            except Exception:
-                st.error("Signup failed. Try a different email.")
+                st.session_state.page = "login"
+                st.experimental_rerun()
+            except Exception as e:
+                st.error(f"Signup failed: {e}")
 
-    if st.button("Back to login"):
+    st.write("Already have an account?")
+    if st.button("Back to Login"):
         st.session_state.page = "login"
-        st.rerun()
+        st.experimental_rerun()
 
 # --- Firestore Entry Fetching ---
+
 def fetch_all_entries(uid):
     try:
         docs = db.collection("users").document(uid).collection("entries").stream()
@@ -67,6 +77,7 @@ def fetch_all_entries(uid):
         return pd.DataFrame()
 
 # --- Utilities ---
+
 def clear_entry_state():
     for key in list(st.session_state.keys()):
         if key.startswith("entry_"):
