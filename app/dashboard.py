@@ -240,7 +240,78 @@ def tab_entries(_):
             st.error(f"Save failed: {e}")
     st.markdown("---")
 
-# --- Graphs and About unchanged; omitted for brevity ---
+# --- Graphs Tab ---
+def tab_graphs(data: pd.DataFrame):
+    st.title("Insights & Calendar")
+    st.markdown("---")
+
+    for key in ["Weight", "Calories", "Protein", "Steps"]:
+        if key not in data.columns:
+            data[key] = 0
+
+    if data.empty or "Date" not in data.columns:
+        st.info("No data yet. Use the Entries tab to log your first workout or daily stats.")
+        st.markdown("---")
+        return
+    
+    # Weight over time
+    wdf = data.assign(
+        DateNorm=pd.to_datetime(data['Date']).dt.normalize(),
+        Weight=pd.to_numeric(data['Weight'], errors='coerce').replace(0, np.nan)
+    ).dropna(subset=['Weight'])
+
+    if wdf.empty:
+        st.write("No weight data to display.")
+    else:
+        mn, mx = wdf['Weight'].min(), wdf['Weight'].max()
+        pad = (mx - mn) * 0.05
+        base = alt.Chart(wdf).encode(x='DateNorm:T')
+        line = base.mark_line(point=True, strokeWidth=3, color='#DA1A32').encode(
+            y=alt.Y('Weight:Q', scale=alt.Scale(domain=[max(mn-pad,0), mx+pad]))
+        )
+        mean_rule = alt.Chart(pd.DataFrame({'mean':[wdf['Weight'].mean()]})).mark_rule(strokeDash=[4,4]).encode(y='mean:Q')
+        st.altair_chart((line+mean_rule).properties(width=700, height=350), use_container_width=True)
+    st.markdown("---")
+
+    # Training calendar
+    data['DateNorm'] = pd.to_datetime(data['Date']).dt.normalize()
+    df_dates = data[['DateNorm','Training']].drop_duplicates()
+    all_days = pd.DataFrame({'DateNorm': pd.date_range(data['DateNorm'].min(), data['DateNorm'].max(), freq='D')})
+    calendar_df = all_days.merge(df_dates, on='DateNorm', how='left').fillna({'Training':'Rest'})
+    calendar_df['Type'] = calendar_df['Training'].apply(lambda x: 'Rest' if x=='Rest' else 'Workout')
+    calendar_df['Week'] = calendar_df['DateNorm'].dt.isocalendar().week
+    calendar_df['Day']  = calendar_df['DateNorm'].dt.day_name().str[:3]
+
+    cal = alt.Chart(calendar_df).mark_rect().encode(
+        x=alt.X('Day:O', sort=['Mon','Tue','Wed','Thu','Fri','Sat','Sun']),
+        y='Week:O',
+        color=alt.Color('Type:N', scale=alt.Scale(domain=['Rest','Workout'], range=['#1E90FF','#DA1A32'])),
+        tooltip=['DateNorm:T','Training:N']
+    ).properties(width=700, height=250)
+    st.altair_chart(cal, use_container_width=True)
+    st.markdown("---")
+
+# --- About Tab ---
+def tab_about(_=None):
+    st.title("👨‍💻 About the Developer")
+    st.markdown("---")
+    st.markdown(
+         """
+        ### Jaime Cruz
+        **Sophomore @ University of Maryland**  
+        Studying **Information Science**, passionate about building useful tools for fitness and student productivity.
+
+         #### 🔧 About TerraPump
+        TerraPump is a personal fitness tracker designed for students and gym-goers.  
+        It helps track daily stats like weight, calories, steps, and workouts – with Firebase-backed authentication and real-time data.
+
+        #### 🌐 Links
+        - [GitHub](https://github.com/jaime428)
+        - [LinkedIn](https://www.linkedin.com/in/jaimecruz428/)
+
+        _Thanks for checking out my project!_
+        """
+    )
 
 def main():
     st.set_page_config(page_title="TerraPump", page_icon=":bar_chart:", layout="wide")
