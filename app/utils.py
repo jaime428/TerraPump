@@ -27,14 +27,23 @@ def show_login_page():
     if st.button("Log in"):
         try:
             user = auth.sign_in_with_email_and_password(email, pw)
-            # Store user info in session state
-            st.session_state.user = {
-                "uid": user["localId"],
-                "email": user.get("email", email)
-            }
+            uid = user["localId"]
+            email = user.get("email", email)
+
+            # --- ensure there’s a users/{uid} doc ---
+            user_ref = db.collection("users").document(uid)
+            if not user_ref.get().exists:
+                user_ref.set({
+                    "email":      email,
+                    "created_at": firestore.SERVER_TIMESTAMP
+                })
+
+            # now store in session_state
+            st.session_state.user = {"uid": uid, "email": email}
             st.session_state.page = "dashboard"
             st.success("✅ Logged in!")
             st.rerun()
+
         except Exception as e:
             st.error(f"Login failed: {e}")
 
@@ -115,3 +124,8 @@ def get_day_name(date_obj):
     if isinstance(date_obj, str):
         date_obj = pd.to_datetime(date_obj)
     return date_obj.strftime("%A")
+
+def fetch_exercise_library():
+    docs = db.collection("exercise_library").stream()
+    # assume each doc has at least “name” and optionally “default_weight”
+    return [doc.to_dict() for doc in docs]
