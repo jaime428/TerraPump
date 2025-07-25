@@ -1,6 +1,5 @@
-APP_VERSION = "0.42"
-import sys
-import os
+APP_VERSION = "0.45"
+import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import streamlit as st
@@ -8,7 +7,7 @@ import datetime
 import pandas as pd
 import altair as alt
 import numpy as np
-from firebase_admin import credentials, firestore
+from firebase_admin import firestore
 from app.utils import (
     fetch_all_entries,
     get_day_value,
@@ -17,11 +16,11 @@ from app.utils import (
     show_login_page,
     show_signup_page,
     get_day_name,
-    slugify
+    slugify,
+    fetch_exercise_library
 )
 from app.firebase_config import db, auth
 
-# Cache helper
 @st.cache_data
 def build_series_dict(df: pd.DataFrame):
     dates = pd.to_datetime(df['Date']).dt.normalize()
@@ -34,24 +33,23 @@ def build_series_dict(df: pd.DataFrame):
         for key in ["Weight", "Calories", "Protein", "Steps"]
     }
 
-# --- Dashboard Tab ---
 def tab_dashboard(data: pd.DataFrame):
-    # Ensure columns exist
+    # —————————————————————————————————————————
+    # Ensure data columns
     for key in ["Weight", "Calories", "Protein", "Steps"]:
         if key not in data.columns:
             data[key] = 0
     series = build_series_dict(data)
 
-    # Workout state
+    # Workout state defaults
     st.session_state.setdefault('workout_log', [])
     st.session_state.setdefault('workout_started', False)
     st.session_state.setdefault('workout_start_time', None)
+    st.session_state.setdefault('sets_count', 1)
 
-    # Header
+    # Header + Quick Stats (unchanged)
     st.markdown("<h1 style='text-align:center;'>TerraPump</h1>", unsafe_allow_html=True)
     st.markdown("---")
-
-    # Quick stats
     today = series['Weight'].index.max()
     yesterday = today - pd.Timedelta(days=1)
     st.markdown("### Quick Stats")
@@ -60,120 +58,208 @@ def tab_dashboard(data: pd.DataFrame):
     for col, label in zip(cols, labels):
         key = label.split()[0]
         s = series[key].last('7D').replace(0, np.nan).ffill()
-        cur = float(get_day_value(s, today))
+        cur  = float(get_day_value(s, today))
         prev = float(get_day_value(s, yesterday))
-        delta = cur - prev
-        col.metric(label, round(cur,1), round(delta,1))
+        col.metric(label, round(cur,1), round(cur-prev,1))
         df_trend = s.reset_index().rename(columns={'_dt':'Date', key:'Value'})
         chart = (
             alt.Chart(df_trend)
-            .mark_line(point=True, strokeWidth=2)
-            .encode(x='Date:T', y='Value:Q', tooltip=['Date:T','Value:Q'])
-            .properties(height=130)
+               .mark_line(point=True, strokeWidth=2)
+               .encode(
+                   x='Date:T', y='Value:Q',
+                   tooltip=['Date:T','Value:Q']
+               )
+               .properties(height=130)
         )
         col.altair_chart(chart, use_container_width=True)
-
     st.markdown("---")
 
-    # Workout section
+    # —————————————————————————————————————————
     st.markdown("### Workout")
     st.markdown("<div style='background:#222;border-radius:8px; padding:1rem;'>", unsafe_allow_html=True)
+
     if not st.session_state.workout_started:
-        name = st.text_input("Name", value=f"Workout {datetime.date.today()}", key="side_name")
+        name = st.text_input(
+            "Name",
+            value=f"Workout {datetime.date.today()}",
+            key="side_name"
+        )
         if st.button("💪 Start Workout", key="side_start"):
-            st.session_state.workout_started = True
+            st.session_state.workout_started    = True
             st.session_state.workout_start_time = datetime.datetime.now()
-            st.session_state.workout_log = [{"name": name, "start": st.session_state.workout_start_time}]
-            st.session_state.setdefault("sets_count", 1)
+            st.session_state.workout_log        = [{"name": name, "start": st.session_state.workout_start_time}]
+            st.session_state.sets_count         = 1
             st.success("Workout started!")
             st.rerun()
+
     else:
         st.write(f"**Started at:** {st.session_state.workout_start_time:%Y-%m-%d %H:%M}")
-        # Exercise form
-        ex_type = st.selectbox("Exercise type", ["Bodyweight","Barbell","Cable","Dumbbell","Machine","Plate-loaded"], index=3)
-        raw_docs = filtered_docs = []
-        default_wt = 0.0
+
+        # 1) Exercise type
+        ex_type    = st.selectbox(
+            "Exercise type",
+            ["Bodyweight","Barbell","Cable","Dumbbell","Machine","Plate-loaded"],
+            index=3,
+            key="exercise_type"
+        )
+        sets_count = st.session_state.sets_count
+
+        # 2) Default weight for pure Barbell
+        type_defaults = {"Barbell": 45.0}
+        default_wt    = type_defaults.get(ex_type, 0.0)
+
+        # 3) Library fallback prep
+        library     = fetch_exercise_library()
+        type_key    = ex_type.lower().replace("-", "").replace(" ", "")
+        filtered_lib = [
+            e for e in library
+            if e.get("type","").lower().replace(" ", "") == type_key
+        ]
+
+        ex = ""       # will hold final exercise name
+        machine_docs = []
+
+        # 4) BRAND + MACHINE selectors (outside the form)
         if ex_type in ("Machine","Plate-loaded"):
-            brands = [b.id for b in db.collection("brands").stream()]
+            brands  = [b.id for b in db.collection("brands").stream()]
             display = [b.replace("_"," ").title() for b in brands]
             mapping = dict(zip(display, brands))
-            sel = st.selectbox("Brand", ["–– pick one ––"]+display)
-            if sel != "–– pick one ––":
-                bid = mapping[sel]
-                machines_ref = db.collection("brands").document(bid).collection("machines")
-                raw_docs = list(machines_ref.stream())
-                dtype = "machine" if ex_type=="Machine" else "plate loaded"
-                filtered_docs = [d for d in raw_docs if d.to_dict().get("type")==dtype]
 
-        st.session_state.setdefault("sets_count", 1)
-        sets_count = st.session_state.sets_count
-        with st.form("exercise_form", clear_on_submit=False):
-            if filtered_docs:
-                ids = [d.id for d in filtered_docs]
-                names = [d.to_dict().get("name","<no name>") for d in filtered_docs]
-                idx = st.selectbox("Select machine", options=list(range(len(names))), format_func=lambda i: names[i])
-                ex = names[idx]
-                md = machines_ref.document(ids[idx]).get().to_dict()
-                default_wt = md.get("default_starting_weight", md.get("default_weight",0.0))
-                st.info(f"💡 Default starting weight for **{ex}**: {default_wt} lbs")
+            sel_brand = st.selectbox(
+                "Brand",
+                ["–– pick one ––"] + display,
+                key="brand_select"
+            )
+            if sel_brand != "–– pick one ––":
+                bid          = mapping[sel_brand]
+                machines_ref = db.collection("brands").document(bid).collection("machines")
+                all_machines = list(machines_ref.stream())
+
+                # match Firestore type → UI type via slugify
+                slug_type    = slugify(ex_type)
+                machine_docs = [
+                    d for d in all_machines
+                    if slugify(d.to_dict().get("type","")) == slug_type
+                ]
+
+                if machine_docs:
+                    names   = [d.to_dict().get("name","<no name>") for d in machine_docs]
+                    sel_name    = st.selectbox("Machine", names, key="machine_select")
+                    idx         = names.index(sel_name)
+                    selected    = machine_docs[idx]
+                    ex          = sel_name
+                    md          = machines_ref.document(selected.id).get().to_dict()
+                    default_wt  = md.get("default_starting_weight",
+                                        md.get("default_weight", default_wt))
+                    st.info(f"💡 Default starting weight for **{ex}**: {default_wt} lbs")
+
+        # 5) LIBRARY or FREE-TEXT fallback (if no machine chosen)
+        if not machine_docs:
+            if filtered_lib:
+                names  = [e["name"] for e in filtered_lib]
+                choice = st.selectbox(
+                    "Pick from exercise library",
+                    names + ["Other (type your own)"],
+                    key="lib_select"
+                )
+                if choice != "Other (type your own)":
+                    ex         = choice
+                    item       = next(e for e in filtered_lib if e["name"]==ex)
+                    default_wt = item.get("default_weight", default_wt)
+                    st.info(f"💡 Default starting weight for **{ex}**: {default_wt} lbs")
             else:
                 ex = st.text_input("Exercise name", key="free_ex_name")
-            if ex:
-                slug = slugify(ex)
-                stats_doc = db.collection("users").document(st.session_state.user["uid"]).collection("exercise_stats").document(slug).get()
-                stats = stats_doc.to_dict() if stats_doc.exists else {}
-            else:
-                stats = {}
-            last_sets = stats.get("last_sets",1)
-            last_reps = stats.get("last_reps",8)
-            last_wt = stats.get("last_weight",default_wt)
-            st.session_state.setdefault("sets_count", last_sets)
+
+        # 6) Stats lookup
+        if ex:
+            slug      = slugify(ex)
+            stats_doc = (
+                db.collection("users")
+                  .document(st.session_state.user["uid"])
+                  .collection("exercise_stats")
+                  .document(slug)
+                  .get()
+            )
+            stats     = stats_doc.to_dict() if stats_doc.exists else {}
+        else:
+            stats = {}
+        last_sets = stats.get("last_sets", 1)
+        last_reps = stats.get("last_reps", 8)
+        last_wt   = stats.get("last_weight", default_wt)
+        st.session_state.setdefault("sets_count", last_sets)
+
+        # 7) Form for Reps / Weights / Buttons
+        with st.form("exercise_form", clear_on_submit=False):
             reps_list, weight_list = [], []
             for i in range(1, sets_count+1):
                 cm, cw = st.columns([3,2])
                 sm, sr = cm.columns([1,7])
                 sm.markdown(f"**Set {i}**")
-                r = sr.number_input("Reps", min_value=1, value=st.session_state.get(f"reps_{i}",last_reps), step=1, key=f"reps_{i}")
-                w = cw.number_input("Weight (lbs)", min_value=0.0, value=st.session_state.get(f"weight_{i}",last_wt), step=1.0, key=f"weight_{i}")
-                reps_list.append(r); weight_list.append(w)
-            b1,b2,b3 = st.columns(3)
-            add_set = b1.form_submit_button("➕ Add Set")
-            rem_set = b2.form_submit_button("➖ Remove Set")
-            submit = b3.form_submit_button("✔ Add to Workout")
-        if add_set:
+                r = sr.number_input(
+                    "Reps", min_value=1,
+                    value=st.session_state.get(f"reps_{i}", last_reps),
+                    step=1, key=f"reps_{i}"
+                )
+                w = cw.number_input(
+                    "Weight (lbs)",
+                    min_value=0.0,
+                    value=float(st.session_state.get(f"weight_{i}", last_wt)),
+                    step=1.0,
+                    key=f"weight_{i}"
+                )
+                reps_list.append(r)
+                weight_list.append(w)
+
+            b1, b2, submit = st.columns(3)
+
+            b1        = st.form_submit_button("➕ Add Set")
+            b2        = st.form_submit_button("➖ Remove Set")
+            submit    = st.form_submit_button("✔ Add to Workout")
+
+        # 8) Handle buttons
+        if b1:
             st.session_state.sets_count += 1
             st.rerun()
-        elif rem_set and st.session_state.sets_count>1:
+        elif b2 and st.session_state.sets_count > 1:
             st.session_state.sets_count -= 1
             st.rerun()
         elif submit:
             st.session_state.workout_log.append({
                 "exercise": ex,
-                "sets": sets_count,
-                "reps": reps_list,
-                "weights": weight_list,
+                "sets":     sets_count,
+                "reps":     reps_list,
+                "weights":  weight_list,
                 "logged_at": datetime.datetime.now()
             })
             st.success(f"Added {ex}: {sets_count} sets")
-        if len(st.session_state.workout_log)>1:
+
+        # 9) Live log + End button
+        if len(st.session_state.workout_log) > 1:
             st.markdown("#### Current Workout Log")
             st.table(pd.DataFrame(st.session_state.workout_log[1:]))
+
         if st.button("🏁 End Workout", key="side_end"):
             user_id = st.session_state.user["uid"]
-            start = st.session_state.workout_start_time
+            start   = st.session_state.workout_start_time
             entries = st.session_state.workout_log[1:]
-            db.collection("users").document(user_id).collection("workouts").document(start.isoformat()).set({
-                "name": st.session_state.workout_log[0]["name"],
-                "start": start,
-                "entries": entries,
-                "timestamp": firestore.SERVER_TIMESTAMP
-            })
+            db.collection("users") \
+              .document(user_id) \
+              .collection("workouts") \
+              .document(start.isoformat()) \
+              .set({
+                  "name":      st.session_state.workout_log[0]["name"],
+                  "start":     start,
+                  "entries":   entries,
+                  "timestamp": firestore.SERVER_TIMESTAMP
+              })
             st.success("✅ Workout saved!")
-            st.session_state.workout_started=False
-            st.session_state.workout_log=[]
+            st.session_state.workout_started = False
+            st.session_state.workout_log     = []
             st.rerun()
+
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
+
 
 # --- Entries Tab ---
 def tab_entries(_):
@@ -228,8 +314,6 @@ def tab_entries(_):
             "Steps":     steps,
             "Training":  training,
             "Cardio":    cardio,
-            "email":     user.get("email"),
-            "created_at": firestore.SERVER_TIMESTAMP,
             "timestamp":  firestore.SERVER_TIMESTAMP,
             "Weight":    weight
         }
