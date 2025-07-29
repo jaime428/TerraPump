@@ -1,4 +1,4 @@
-APP_VERSION = "0.51"
+APP_VERSION = "0.52"
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -18,11 +18,14 @@ from app.utils import (
     get_day_name,
     slugify,
     fetch_exercise_library,
-    fetch_attachments
+    fetch_attachments,
+    resolve_default_wt
 )
 from app.firebase_config import db, auth
 
+
 @st.cache_data
+
 def build_series_dict(df: pd.DataFrame):
     dates = pd.to_datetime(df['Date']).dt.normalize()
     return {
@@ -33,6 +36,7 @@ def build_series_dict(df: pd.DataFrame):
         )
         for key in ["Weight", "Calories", "Protein", "Steps"]
     }
+
 
 def tab_dashboard(data: pd.DataFrame):
     # Ensure data columns
@@ -124,6 +128,13 @@ def tab_dashboard(data: pd.DataFrame):
             e for e in library
             if e.get("type","").lower().replace(" ", "") == type_key
         ]
+        if ex_type in ("Machine"):
+            smith_only = st.checkbox("Only show Smith‐machine exercises", key="smith_only")
+            if smith_only:
+                filtered_lib = [
+                    e for e in filtered_lib
+                    if e.get("subtype","").lower() == "smith"
+                ]
 
         ex = ""       
         machine_docs = []
@@ -143,7 +154,8 @@ def tab_dashboard(data: pd.DataFrame):
                 if sel != "–– pick one ––":
                     attach     = next(a for a in cable_atts if a["name"] == sel)
                     ex         = attach["name"]                          # 📌 set the exercise
-                    default_wt = attach.get("default_weight", default_wt)  # 📌 override default
+                    default_wt = resolve_default_wt(attach, default_wt)
+                    
 
                 # block out the other fallbacks
                 machine_docs = ["__cable_selected__"]
@@ -163,8 +175,6 @@ def tab_dashboard(data: pd.DataFrame):
                 bid          = mapping[sel_brand]
                 machines_ref = db.collection("brands").document(bid).collection("machines")
                 all_machines = list(machines_ref.stream())
-
-                # match Firestore type → UI type via slugify
                 slug_type    = slugify(ex_type)
                 machine_docs = [
                     d for d in all_machines
@@ -178,8 +188,7 @@ def tab_dashboard(data: pd.DataFrame):
                     selected    = machine_docs[idx]
                     ex          = sel_name
                     md          = machines_ref.document(selected.id).get().to_dict()
-                    default_wt  = md.get("default_starting_weight",
-                                        md.get("default_weight", default_wt))
+                    default_wt = resolve_default_wt(md, default_wt)
                     st.info(f"💡 Default starting weight for **{ex}**: {default_wt} lbs")
 
         # 5) LIBRARY or FREE-TEXT fallback (if no machine chosen)
@@ -192,10 +201,33 @@ def tab_dashboard(data: pd.DataFrame):
                     key="lib_select"
                 )
                 if choice != "Other (type your own)":
-                    ex         = choice
-                    item       = next(e for e in filtered_lib if e["name"]==ex)
-                    default_wt = item.get("default_weight", default_wt)
-                    st.info(f"💡 Default starting weight for **{ex}**: {default_wt} lbs")
+                    ex   = choice
+                    item = next(e for e in filtered_lib if e["name"] == ex)
+                    lib_subtype = item.get("subtype")
+
+
+                    # 1️⃣ apply the library’s default
+                    default_wt = resolve_default_wt(item, default_wt)
+
+                    # 2️⃣ only override for Machine/Plate-loaded
+                    if ex_type in ("Machine", "Plate-loaded"):
+                        for b in db.collection("brands").stream():
+                            machines_ref = db.collection("brands")\
+                                            .document(b.id)\
+                                            .collection("machines")
+                            mdocs = list(machines_ref
+                                        .where("name", "==", ex)
+                                        .limit(1)
+                                        .stream())
+                            if mdocs:
+                                md         = mdocs[0].to_dict()
+                                default_wt = resolve_default_wt(md, default_wt)
+                                brand_name = b.to_dict().get("name", b.id)
+                                st.info(f"💡 Overriding with **{brand_name}** default: {default_wt} lbs")
+                                break
+                    else:
+                        # non-machine types just show the library default
+                        st.info(f"💡 Default starting weight for **{ex}**: {default_wt} lbs")
             else:
                 ex = st.text_input("Exercise name", key="free_ex_name")
 
@@ -286,8 +318,30 @@ def tab_dashboard(data: pd.DataFrame):
                 "unilateral" : unilateral,
                 "logged_at": datetime.datetime.now()
             })
-            st.success(f"Added {ex}: {sets_count} sets")
-            st.rerun()
+            if unilateral:
+                # weight_list[-1] is a dict {'left':…, 'right':…}
+                last_weight = weight_list[-1]
+                last_reps   = reps_list[-1]
+            else:
+                last_weight = weight_list[-1]
+                last_reps   = reps_list[-1]
+
+            # 3) save into exercise_stats under your user
+            user_id = st.session_state.user["uid"]
+            slug    = slugify(ex)
+            stats_ref = db \
+                .collection("users") \
+                .document(user_id) \
+                .collection("exercise_stats") \
+                .document(slug)
+
+            stats_ref.set({
+                "last_sets":   sets_count,
+                "last_reps":   last_reps,
+                "last_weight": last_weight
+            }, merge=True)
+
+            st.success(f"Added {ex}: {sets_count} sets (stats updated)")
 
         # 9) Live log + End button
         if len(st.session_state.workout_log) > 1:
@@ -312,11 +366,10 @@ def tab_dashboard(data: pd.DataFrame):
                     "Sets":      entry["sets"],
                     "Reps":      reps_str,
                     "Weights":   wt_str,
-                    "Logged At": entry["logged_at"].strftime("%Y-%m-%d %H:%M"),
                 })
 
             df_display = pd.DataFrame(display_log)
-            st.table(df_display)
+            st.dataframe(df_display, use_container_width=True)
 
         if st.button("🏁 End Workout", key="side_end"):
             user_id = st.session_state.user["uid"]
@@ -385,12 +438,11 @@ def tab_dashboard(data: pd.DataFrame):
                     "Exercise":   e["exercise"],
                     "Sets":       e["sets"],
                     "Reps":       reps_str,
-                    "Weights":    wt_str,
                     "Logged At":  e["logged_at"].strftime("%Y-%m-%d %H:%M"),
                 })
 
             df_past = pd.DataFrame(rows)
-            st.table(df_past)
+            st.dataframe(df_past, use_container_width=True)
     # — end Past Workouts —
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
@@ -532,6 +584,193 @@ def tab_about(_=None):
         """
     )
 
+ADMIN_UID = st.secrets["admin"]["uid"]
+def tab_admin(_=None):
+    user = st.session_state.get("user")
+    if not user or user["uid"] != ADMIN_UID:
+        st.error("❌ You don’t have permission to access this page.")
+        return
+    st.title("🛠️ Admin: Brands & Machines")
+    st.markdown("---")
+    
+    st.subheader("🔍 Existing Brands & Machines")
+
+    # 2) Per-brand expander + dropdown
+    st.subheader("Browse by Brand")
+    for b in db.collection("brands").stream():
+        brand_id   = b.id
+        brand_name = b.to_dict().get("name", brand_id)
+        machines_ref = db.collection("brands").document(brand_id).collection("machines")
+        machines   = list(machines_ref.stream())
+
+        with st.expander(brand_name):
+            # — Delete Brand (only if no machines) —
+            if st.button(
+                "🗑️ Delete Brand",
+                key=f"del_brand_{brand_id}",
+                help="Remove this brand (only works if there are no machines)"
+            ):
+                if not machines:
+                    db.collection("brands").document(brand_id).delete()
+                    st.success(f"Deleted brand {brand_name}")
+                    st.rerun()
+                else:
+                    st.error("Please remove all machines first!")
+
+            if not machines:
+                st.write("No machines for this brand.")
+                continue
+
+            # — List each machine with Delete + Edit —
+            for m in machines:
+                mdata        = m.to_dict()
+                machine_name = mdata.get("name", m.id)
+                mid          = m.id
+
+                cols = st.columns([4, 1, 1])
+                default = resolve_default_wt(mdata, "")
+                cols[0].markdown(
+                    f"**{machine_name}**  \n"
+                    f"Type: {mdata.get('type','')}  |  "
+                    f"Default: {default} lb"
+                )
+
+                # Delete Machine
+                if cols[1].button(
+                    "🗑️",
+                    key=f"del_{brand_id}_{mid}",
+                    help="Delete this machine"
+                ):
+                    machines_ref.document(mid).delete()
+                    st.success(f"Deleted {machine_name}")
+                    st.rerun()
+
+                # Edit Machine
+                if cols[2].button(
+                    "✏️",
+                    key=f"edit_{brand_id}_{mid}",
+                    help="Edit this machine"
+                ):
+                    with st.form(f"edit_form_{brand_id}_{mid}", clear_on_submit=False):
+                        new_name = st.text_input("Machine name", value=machine_name)
+                        type_options = ["Machine","Plate-loaded","Cable","Barbell","Dumbbell","Bodyweight"]
+                        default_index = type_options.index(mdata.get("type","Machine")) \
+                            if mdata.get("type","Machine") in type_options else 0
+                        new_type  = st.selectbox("Type", type_options, index=default_index)
+                        new_start = st.number_input(
+                            "Default starting weight",
+                            value=float(mdata.get("default_starting_weight", 0)),
+                            min_value=0.0, step=1.0
+                        )
+                        save = st.form_submit_button("💾 Save changes")
+
+                    if save:
+                        machines_ref.document(mid).update({
+                            "name": new_name,
+                            "type": new_type,
+                            "default_starting_weight": new_start
+                        })
+                        st.success(f"Updated {new_name}")
+                        st.rerun()
+    st.markdown("---")
+
+    
+    # — Add a new Brand —
+    st.subheader("Create a new Brand")
+    with st.form("brand_form", clear_on_submit=True):
+        brand_name = st.text_input("Brand name")
+        add_brand  = st.form_submit_button("➕ Add Brand")
+    if add_brand:
+        if not brand_name:
+            st.error("Give your brand a name!")
+        else:
+            bid = slugify(brand_name)
+            try:
+                db.collection("brands").document(bid).set({"name": brand_name})
+                st.success(f"Brand '{brand_name}' created!")
+            except Exception as e:
+                st.error(f"Failed to add brand: {e}")
+
+    st.markdown("---")
+
+    # — Add a new Machine to an existing Brand —
+    st.subheader("Create a new Machine")
+    # Fetch existing brands for the dropdown
+    brands = list(db.collection("brands").stream())
+    brand_choices = {b.to_dict().get("name","<unknown>"): b.id for b in brands}
+    sel = st.selectbox("Select Brand", [""] + list(brand_choices.keys()))
+    if sel:
+        with st.form("machine_form", clear_on_submit=True):
+            machine_name    = st.text_input("Machine name")
+            machine_type    = st.selectbox("Type", ["Machine","Plate-loaded","Cable","Barbell","Dumbbell","Bodyweight"])
+            default_weight  = st.number_input("Default starting weight", min_value=20.0, step=1.0)
+            subtype        = st.text_input("Subtype (optional)", help="e.g. smith, angled, lever")
+            add_machine     = st.form_submit_button("➕ Add Machine")
+        if add_machine:
+            if not machine_name:
+                st.error("Give your machine a name!")
+            else:
+                mid = slugify(machine_name)
+                payload = {
+                    "name":                   machine_name,
+                    "type":                   machine_type,
+                    "default_starting_weight": default_weight
+                }
+                if subtype.strip():
+                    payload["subtype"] = subtype.strip().lower()
+                try:
+                    db.collection("brands") \
+                    .document(brand_choices[sel]) \
+                    .collection("machines") \
+                    .document(slugify(machine_name)) \
+                    .set(payload)
+                    st.success("Machine added!")
+                except Exception as e:
+                    st.error(f"Failed to add machine: {e}")
+    st.markdown("---")
+    st.subheader("🏋️ Add to Exercise Library")
+
+    with st.form("exercise_lib_form", clear_on_submit=True):
+        ex_name       = st.text_input("Exercise name")
+        lib_type      = st.selectbox(
+            "Type",
+            ["Bodyweight","Barbell","Cable","Dumbbell","Machine","Plate-loaded"], index=4
+        )
+        default_wt    = st.number_input(
+            "Default weight (lbs)", 
+            min_value=0.0, step=1.0, value=0.0,
+            help="This is the generic fallback if no brand override exists"
+        )
+        subtype       = st.text_input(
+            "Subtype (optional)", 
+            help="e.g. smith, compound, isolation — for your own filtering"
+        )
+        add_to_lib    = st.form_submit_button("➕ Add Exercise")
+
+    if add_to_lib:
+        if not ex_name.strip():
+            st.error("Give your exercise a name!")
+        else:
+            slug = slugify(ex_name)
+            payload = {
+                "name": ex_name,
+                "type": lib_type,
+                "default_weight" : default_weight
+            }
+            # only include if non-zero / non-empty
+            if subtype.strip():
+                payload["subtype"] = subtype.strip().lower()
+
+            try:
+                db.collection("exercise_library") \
+                .document(slug) \
+                .set(payload)
+                st.success(f"Exercise '{ex_name}' added to library!")
+            except Exception as e:
+                st.error(f"Failed to add exercise: {e}")
+        st.markdown("---")
+
+
 def main():
     st.set_page_config(page_title="TerraPump", page_icon=":bar_chart:", layout="wide")
     st.sidebar.caption(f"Version {APP_VERSION}")
@@ -555,15 +794,25 @@ def main():
     data = fetch_all_entries(st.session_state.user['uid'])
 
     # Sidebar navigation
-    for icon,label in [("🏋️","Dashboard & Workout"),("📋","Entries"),("📈","Graphs"),("🙋","About")]:
+    nav_items = [
+        ("🏋️","Dashboard & Workout"),
+        ("📋","Entries"),
+        ("📈","Graphs"),
+        ("🙋","About"),
+    ]
+    if st.session_state.get("user", {}).get("uid") == ADMIN_UID:
+        if st.sidebar.button("🛠️ Admin"):
+            st.session_state.page = "Admin"
+    for icon, label in nav_items:
         if st.sidebar.button(f"{icon} {label}"):
             st.session_state.page = label
 
     pages = {
         "Dashboard & Workout": tab_dashboard,
-        "Entries": tab_entries,
-        "Graphs": tab_graphs,
-        "About": tab_about
+        "Entries":             tab_entries,
+        "Graphs":              tab_graphs,
+        "About":               tab_about,
+        "Admin":               tab_admin
     }
     pages.get(st.session_state.page, tab_dashboard)(data)
 
