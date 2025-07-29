@@ -129,3 +129,12 @@ def fetch_exercise_library():
     docs = db.collection("exercise_library").stream()
     # assume each doc has at least “name” and optionally “default_weight”
     return [doc.to_dict() for doc in docs]
+
+def fetch_attachments():
+    docs = db.collection("attachments").stream()
+    # each dict will have whatever fields you set in Firestore,
+    # e.g. {"name":"EZ Bar","type":"Cable","default_weight":20}
+    return [doc.to_dict() for doc in docs]
+
+
+
