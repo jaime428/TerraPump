@@ -1,4 +1,4 @@
-APP_VERSION = "0.5"
+APP_VERSION = "0.51"
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -8,7 +8,7 @@ import pandas as pd
 import altair as alt
 import numpy as np
 from firebase_admin import firestore
-from app.utils import (
+from .utils import (
     fetch_all_entries,
     get_day_value,
     clear_entry_state,
