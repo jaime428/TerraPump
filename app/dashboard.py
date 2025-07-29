@@ -8,7 +8,7 @@ import pandas as pd
 import altair as alt
 import numpy as np
 from firebase_admin import firestore
-from .utils import (
+from app.utils import (
     fetch_all_entries,
     get_day_value,
     clear_entry_state,
