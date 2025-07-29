@@ -1,4 +1,4 @@
-APP_VERSION = "0.45"
+APP_VERSION = "0.5"
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -17,7 +17,8 @@ from app.utils import (
     show_signup_page,
     get_day_name,
     slugify,
-    fetch_exercise_library
+    fetch_exercise_library,
+    fetch_attachments
 )
 from app.firebase_config import db, auth
 
@@ -34,7 +35,6 @@ def build_series_dict(df: pd.DataFrame):
     }
 
 def tab_dashboard(data: pd.DataFrame):
-    # —————————————————————————————————————————
     # Ensure data columns
     for key in ["Weight", "Calories", "Protein", "Steps"]:
         if key not in data.columns:
@@ -69,7 +69,7 @@ def tab_dashboard(data: pd.DataFrame):
                    x='Date:T', y='Value:Q',
                    tooltip=['Date:T','Value:Q']
                )
-               .properties(height=130)
+               .properties(height=200)
         )
         col.altair_chart(chart, use_container_width=True)
     st.markdown("---")
@@ -102,7 +102,16 @@ def tab_dashboard(data: pd.DataFrame):
             index=3,
             key="exercise_type"
         )
+
+        st.session_state.setdefault("unilateral", False)
+        unilateral = st.checkbox(
+            "Unilateral exercise? (separate left/right reps & weights)",
+            value=st.session_state["unilateral"],
+            key="unilateral"
+        )
+
         sets_count = st.session_state.sets_count
+        
 
         # 2) Default weight for pure Barbell
         type_defaults = {"Barbell": 45.0}
@@ -116,11 +125,31 @@ def tab_dashboard(data: pd.DataFrame):
             if e.get("type","").lower().replace(" ", "") == type_key
         ]
 
-        ex = ""       # will hold final exercise name
+        ex = ""       
         machine_docs = []
+       
+
+        if ex_type == "Cable":
+            # Pull all attachments, then filter to only type “Cable”
+            all_atts   = fetch_attachments()
+            cable_atts = [a for a in all_atts if a.get("type","").strip().lower()=="cable"]
+            if not cable_atts:
+                st.warning("No cable attachments found.")
+                machine_docs = []  # fallback back to library/text
+            else:
+                names = [a.get("name","<no name>") for a in cable_atts]
+                sel   = st.selectbox("Attachment", ["–– pick one ––"] + names, key="cable_select")
+
+                if sel != "–– pick one ––":
+                    attach     = next(a for a in cable_atts if a["name"] == sel)
+                    ex         = attach["name"]                          # 📌 set the exercise
+                    default_wt = attach.get("default_weight", default_wt)  # 📌 override default
+
+                # block out the other fallbacks
+                machine_docs = ["__cable_selected__"]
 
         # 4) BRAND + MACHINE selectors (outside the form)
-        if ex_type in ("Machine","Plate-loaded"):
+        elif ex_type in ("Machine","Plate-loaded"):
             brands  = [b.id for b in db.collection("brands").stream()]
             display = [b.replace("_"," ").title() for b in brands]
             mapping = dict(zip(display, brands))
@@ -143,7 +172,7 @@ def tab_dashboard(data: pd.DataFrame):
                 ]
 
                 if machine_docs:
-                    names   = [d.to_dict().get("name","<no name>") for d in machine_docs]
+                    names       = [d.to_dict().get("name","<no name>") for d in machine_docs]
                     sel_name    = st.selectbox("Machine", names, key="machine_select")
                     idx         = names.index(sel_name)
                     selected    = machine_docs[idx]
@@ -183,32 +212,57 @@ def tab_dashboard(data: pd.DataFrame):
             stats     = stats_doc.to_dict() if stats_doc.exists else {}
         else:
             stats = {}
+
         last_sets = stats.get("last_sets", 1)
         last_reps = stats.get("last_reps", 8)
         last_wt   = stats.get("last_weight", default_wt)
         st.session_state.setdefault("sets_count", last_sets)
 
         # 7) Form for Reps / Weights / Buttons
+
         with st.form("exercise_form", clear_on_submit=False):
-            reps_list, weight_list = [], []
-            for i in range(1, sets_count+1):
-                cm, cw = st.columns([3,2])
-                sm, sr = cm.columns([1,7])
+            reps_list = []
+            weight_list = []
+            for i in range(1, sets_count + 1):
+                cm, cw = st.columns([3, 2])
+                sm, sr = cm.columns([1, 7])
                 sm.markdown(f"**Set {i}**")
-                r = sr.number_input(
-                    "Reps", min_value=1,
-                    value=st.session_state.get(f"reps_{i}", last_reps),
-                    step=1, key=f"reps_{i}"
-                )
-                w = cw.number_input(
-                    "Weight (lbs)",
-                    min_value=0.0,
-                    value=float(st.session_state.get(f"weight_{i}", last_wt)),
-                    step=1.0,
-                    key=f"weight_{i}"
-                )
-                reps_list.append(r)
-                weight_list.append(w)
+                if st.session_state["unilateral"]:
+                    left_reps = sr.number_input(
+                        "Left reps", min_value=1,
+                        value=st.session_state.get(f"reps_left_{i}", last_reps),
+                        step=1, key=f"reps_left_{i}"
+                    )
+                    right_reps = sr.number_input(
+                        "Right reps", min_value=1,
+                        value=st.session_state.get(f"reps_right_{i}", last_reps),
+                        step=1, key=f"reps_right_{i}"
+                    )
+                    reps_list.append({"left": left_reps, "right": right_reps})
+                    left_wt = cw.number_input(
+                        "Left weight (lbs)", min_value=0.0,
+                        value=float(st.session_state.get(f"weight_left_{i}", last_wt)),
+                        step=1.0, key=f"weight_left_{i}"
+                    )
+                    right_wt = cw.number_input(
+                        "Right weight (lbs)", min_value=0.0,
+                        value=float(st.session_state.get(f"weight_right_{i}", last_wt)),
+                        step=1.0, key=f"weight_right_{i}"
+                    )
+                    weight_list.append({"left": left_wt, "right": right_wt})
+                else:
+                    r = sr.number_input(
+                        "Reps", min_value=1,
+                        value=st.session_state.get(f"reps_{i}", last_reps),
+                        step=1, key=f"reps_{i}"
+                    )
+                    reps_list.append(r)
+                    w = cw.number_input(
+                        "Weight (lbs)", min_value=0.0,
+                        value=float(st.session_state.get(f"weight_{i}", last_wt)),
+                        step=1.0, key=f"weight_{i}"
+                    )
+                    weight_list.append(w)
 
             b1, b2, submit = st.columns(3)
 
@@ -229,14 +283,40 @@ def tab_dashboard(data: pd.DataFrame):
                 "sets":     sets_count,
                 "reps":     reps_list,
                 "weights":  weight_list,
+                "unilateral" : unilateral,
                 "logged_at": datetime.datetime.now()
             })
             st.success(f"Added {ex}: {sets_count} sets")
+            st.rerun()
 
         # 9) Live log + End button
         if len(st.session_state.workout_log) > 1:
             st.markdown("#### Current Workout Log")
-            st.table(pd.DataFrame(st.session_state.workout_log[1:]))
+
+            display_log = []
+            for entry in st.session_state.workout_log[1:]:
+                reps = entry["reps"]
+                if all(isinstance(r, dict) for r in reps):
+                    reps_str = "  ".join(f"{r['left']}/{r['right']}" for r in reps)
+                else:
+                    reps_str = "  ".join(str(r) for r in reps)
+
+                weights = entry["weights"]
+                if all(isinstance(w, dict) for w in weights):
+                    wt_str = "  ".join(f"{w['left']}/{w['right']}" for w in weights)
+                else:
+                    wt_str = "  ".join(str(w) for w in weights)
+
+                display_log.append({
+                    "Exercise":  entry["exercise"],
+                    "Sets":      entry["sets"],
+                    "Reps":      reps_str,
+                    "Weights":   wt_str,
+                    "Logged At": entry["logged_at"].strftime("%Y-%m-%d %H:%M"),
+                })
+
+            df_display = pd.DataFrame(display_log)
+            st.table(df_display)
 
         if st.button("🏁 End Workout", key="side_end"):
             user_id = st.session_state.user["uid"]
@@ -257,6 +337,61 @@ def tab_dashboard(data: pd.DataFrame):
             st.session_state.workout_log     = []
             st.rerun()
 
+    # —————————————————————————————————————————
+    st.markdown("---")
+    st.markdown("### Past Workouts")
+    user_id = st.session_state.user["uid"]
+    workouts_ref = (
+        db.collection("users")
+        .document(user_id)
+        .collection("workouts")
+    )
+    
+    docs = list(workouts_ref.order_by("start", direction=firestore.Query.DESCENDING).stream())
+    if not docs:
+        st.info("You haven't saved any workouts yet.")
+    else:
+        # build a picklist of "Workout name (YYYY-MM-DD HH:MM)"
+        placeholder = "Select a workout..."
+        labels = [placeholder]
+        data = [None]
+        for doc in docs:
+            w = doc.to_dict()
+            ts = w["start"]  # this is a Python datetime
+            labels.append(f"{w['name']} ({ts:%Y-%m-%d %H:%M})")
+            data.append(w)
+
+        sel = st.selectbox("", labels, index=0, key="past_wkt")
+        if sel!= placeholder:
+            workout = data[labels.index(sel)]
+
+        # turn its entries into a display table
+            rows = []
+            for e in workout["entries"]:
+                # format reps
+                r = e["reps"]
+                if all(isinstance(x, dict) for x in r):
+                    reps_str = "  ".join(f"{x['left']}/{x['right']}" for x in r)
+                else:
+                    reps_str = "  ".join(str(x) for x in r)
+                # format weights
+                wts = e["weights"]
+                if all(isinstance(x, dict) for x in wts):
+                    wt_str = "  ".join(f"{x['left']}/{x['right']}" for x in wts)
+                else:
+                    wt_str = "  ".join(str(x) for x in wts)
+
+                rows.append({
+                    "Exercise":   e["exercise"],
+                    "Sets":       e["sets"],
+                    "Reps":       reps_str,
+                    "Weights":    wt_str,
+                    "Logged At":  e["logged_at"].strftime("%Y-%m-%d %H:%M"),
+                })
+
+            df_past = pd.DataFrame(rows)
+            st.table(df_past)
+    # — end Past Workouts —
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
 
