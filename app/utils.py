@@ -137,9 +137,16 @@ def fetch_attachments():
     return [doc.to_dict() for doc in docs]
 
 def resolve_default_wt(item: dict, fallback: float) -> float:
-    if item.get("default_starting_weight") is None:
-        return float(item["default_starting_weight"])
-    if item.get("default_weight") is not None:
-        return float(item(["default_weight"]))
+    if "default_starting_weight" in item:
+        try:
+            return float(item["default_starting_weight"])
+        except (TypeError, ValueError):
+            return fallback
+
+    if "default_weight" in item:
+        try:
+            return float(item["default_weight"])
+        except (TypeError, ValueError):
+            return fallback
     return fallback
 
