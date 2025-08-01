@@ -460,15 +460,6 @@ def tab_dashboard(data: pd.DataFrame):
             cols[3].markdown(f"{e['sets']} sets")
             cols[4].markdown(reps_str)
             cols[5].markdown(wt_str)
-            if cols[6].button("❌", key=f"remove_past_{idx}"):
-                # delete from Firestore then:
-                workout_id = workout["start"].isoformat()
-                # remove locally too:
-                st.session_state.workout_log.pop(idx)
-                st.rerun()
-
-                
-
             doc_id = workout["start"].isoformat()
             btn_key = f"del_workout_{doc_id}"
             if st.button("🗑️ Delete Workout", key=btn_key):
@@ -479,6 +470,11 @@ def tab_dashboard(data: pd.DataFrame):
                 .delete()
                 st.success("Deleted workout.")
                 st.rerun()
+
+                
+
+            
+            
     # — end Past Workouts —
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
