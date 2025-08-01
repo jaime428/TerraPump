@@ -268,6 +268,7 @@ def tab_dashboard(data: pd.DataFrame):
         else:
             stats = {}
 
+
         raw_sets = stats.get("last_sets", 1)
         try:
             last_sets = int(raw_sets)
@@ -280,7 +281,18 @@ def tab_dashboard(data: pd.DataFrame):
         except (TypeError, ValueError):
             last_reps = 8
 
-        last_wt = stats.get("last_weight", default_wt)
+        raw_last_wt = stats.get("last_weight", default_wt)
+        if isinstance(raw_last_wt, dict):
+            # pull left/right if available, else fall back to overall default
+            last_wt_left  = raw_last_wt.get("left",  default_wt)
+            last_wt_right = raw_last_wt.get("right", default_wt)
+            # you can also define an “average” for non-unilateral cases
+            last_wt = (last_wt_left + last_wt_right) / 2.0
+        else:
+            # a single number for all cases
+            last_wt = float(raw_last_wt)
+            last_wt_left = last_wt
+            last_wt_right = last_wt
 
         st.session_state.setdefault("sets_count", last_sets)
             
@@ -314,12 +326,12 @@ def tab_dashboard(data: pd.DataFrame):
                     reps_list.append({"left": left_reps, "right": right_reps})
                     left_wt = cw.number_input(
                         "Left weight (lbs)", min_value=0.0,
-                        value=float(st.session_state.get(f"weight_left_{i}", last_wt)),
+                        value=float(st.session_state.get(f"weight_left_{i}", last_wt_left)),
                         step=0.25, key=f"weight_left_{i}"
                     )
                     right_wt = cw.number_input(
                         "Right weight (lbs)", min_value=0.0,
-                        value=float(st.session_state.get(f"weight_right_{i}", last_wt)),
+                        value=float(st.session_state.get(f"weight_right_{i}", last_wt_right)),
                         step=0.25, key=f"weight_right_{i}"
                     )
                     weight_list.append({"left": left_wt, "right": right_wt})
