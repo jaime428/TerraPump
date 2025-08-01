@@ -460,8 +460,8 @@ def tab_dashboard(data: pd.DataFrame):
                 cols[1].markdown(f"**{e['exercise']}**")
                 cols[2].markdown(e.get("attachment", ""))
                 cols[3].markdown(f"{e['sets']} sets")
-                cols[4].markdown(reps_str)
-                cols[5].markdown(wt_str)
+                cols[4].markdown(f"{reps_str} reps")
+                cols[5].markdown(f"{wt_str} lbs")
 
             delete_key = f"del_workout_{wk_idx}"
             if st.button("🗑️ Delete Workout", key=delete_key):
