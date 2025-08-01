@@ -268,55 +268,24 @@ def tab_dashboard(data: pd.DataFrame):
         else:
             stats = {}
 
-        # — unpack last_reps, handling unilateral dicts —
+        last_sets = int(stats.get("last_sets", 1))
         raw_last_reps = stats.get("last_reps", 8)
         if isinstance(raw_last_reps, dict):
-            last_reps_left  = int(raw_last_reps.get("left", 8))
-            last_reps_right = int(raw_last_reps.get("right", 8))
-            # pick an overall default for non-unilateral cases:
-            last_reps       = (last_reps_left + last_reps_right) // 2
+            # unilateral saved as {"left":…, "right":…}
+            left, right = raw_last_reps.get("left",8), raw_last_reps.get("right",8)
+            last_reps = (left + right)//2
         else:
             last_reps = int(raw_last_reps)
-            last_reps_left = last_reps_right = last_reps
 
-        # — unpack last_weight, handling unilateral dicts (you may already have this) —
+        # weight default
         raw_last_wt = stats.get("last_weight", default_wt)
         if isinstance(raw_last_wt, dict):
-            last_wt_left  = raw_last_wt.get("left", default_wt)
-            last_wt_right = raw_last_wt.get("right", default_wt)
-            last_wt       = (last_wt_left + last_wt_right) / 2.0
+            l, r = raw_last_wt["left"], raw_last_wt["right"]
+            last_wt = (l+r)/2
         else:
             last_wt = float(raw_last_wt)
-            last_wt_left = last_wt_right = last_wt
 
-        # now you can safely set:
-        st.session_state.setdefault("sets_count", stats.get("last_sets", 1))
-
-        raw_sets = stats.get("last_sets")
-        try:
-            last_sets = int(raw_sets)
-        except (TypeError, ValueError):
-            last_sets = 1
-
-        raw_reps = stats.get("last_reps", 8)
-        try:
-            last_reps = int(raw_reps)
-        except (TypeError, ValueError):
-            last_reps = 8
-
-        raw_last_wt = stats.get("last_weight", default_wt)
-        if isinstance(raw_last_wt, dict):
-            # pull left/right if available, else fall back to overall default
-            last_wt_left  = raw_last_wt.get("left",  default_wt)
-            last_wt_right = raw_last_wt.get("right", default_wt)
-            # you can also define an “average” for non-unilateral cases
-            last_wt = (last_wt_left + last_wt_right) / 2.0
-        else:
-            # a single number for all cases
-            last_wt = float(raw_last_wt)
-            last_wt_left = last_wt
-            last_wt_right = last_wt
-
+        # init session
         st.session_state.setdefault("sets_count", last_sets)
             
         # 7) Add / Remove Set controls (outside the form)
@@ -359,14 +328,16 @@ def tab_dashboard(data: pd.DataFrame):
                     )
                     weight_list.append({"left": left_wt, "right": right_wt})
                 else:
+                    default_r = st.session_state.get(f"reps_{i}", last_reps)
                     r = sr.number_input(
                         "Reps", 
-                        min_value=1.0,
-                        value=st.session_state.get(f"reps_{i}", last_reps),
+                        min_value=1,
+                        value=int(default_r),
                         step=1, 
                         key=f"reps_{i}"
                     )
                     reps_list.append(r)
+
                     w = cw.number_input(
                         "Weight (lbs)", min_value=0.0,
                         value=float(st.session_state.get(f"weight_{i}", last_wt)),
@@ -525,12 +496,11 @@ def tab_dashboard(data: pd.DataFrame):
 
             delete_key = f"del_workout_{wk_idx}"
             if st.button("🗑️ Delete Workout", key=delete_key):
-                doc_id = workout["start"].isoformat()
                 db.collection("users") \
-                    .document(st.session_state.user["uid"]) \
-                    .collection("workouts") \
-                    .document(doc_id) \
-                    .delete()
+                .document(st.session_state.user["uid"]) \
+                .collection("workouts") \
+                .document(workout["start"].isoformat()) \
+                .delete()
                 st.success("Deleted workout.")
                 st.rerun()
                         
