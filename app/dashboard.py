@@ -1,4 +1,4 @@
-APP_VERSION = "0.53"
+APP_VERSION = "0.54"
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -382,10 +382,12 @@ def tab_dashboard(data: pd.DataFrame):
                     wt_str = "  ".join(str(w) for w in weights)
 
                 display_log.append({
-                    "Exercise":  entry["exercise"],
+                    "Brand":      entry.get("brand", ""),
+                    "Exercise":  entry["exercise"],        
+                    "Attachment": entry.get("attachment", ""),   
                     "Sets":      entry["sets"],
                     "Reps":      reps_str,
-                    "Weights":   wt_str,
+                    "Weights":   wt_str
                 })
 
             df_display = pd.DataFrame(display_log)
