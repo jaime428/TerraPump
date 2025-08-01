@@ -268,9 +268,20 @@ def tab_dashboard(data: pd.DataFrame):
         else:
             stats = {}
 
-        last_sets = stats.get("last_sets", 1)
-        last_reps = int(stats.get("last_reps", 8))
-        last_wt   = stats.get("last_weight", default_wt)
+        raw_sets = stats.get("last_sets", 1)
+        try:
+            last_sets = int(raw_sets)
+        except (TypeError, ValueError):
+            last_sets = 1
+
+        raw_reps = stats.get("last_reps", 8)
+        try:
+            last_reps = int(raw_reps)
+        except (TypeError, ValueError):
+            last_reps = 8
+
+        last_wt = stats.get("last_weight", default_wt)
+
         st.session_state.setdefault("sets_count", last_sets)
             
         # 7) Add / Remove Set controls (outside the form)
