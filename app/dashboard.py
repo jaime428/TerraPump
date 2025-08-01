@@ -454,7 +454,7 @@ def tab_dashboard(data: pd.DataFrame):
                     wt_str = "  ".join(str(x) for x in wts)
 
                 rows.append({
-                    "Brand": e.get("brand", "")
+                    "Brand": e.get("brand", ""),
                     "Exercise":   e["exercise"],
                     "Attachment": e.get("attachment", ""),   
                     "Sets":       e["sets"],
