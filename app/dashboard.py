@@ -291,13 +291,13 @@ def tab_dashboard(data: pd.DataFrame):
                 sm.markdown(f"**Set {i}**")
                 if st.session_state["unilateral"]:
                     left_reps = sr.number_input(
-                        "Left reps", min_value=1.0,
-                        value=st.session_state.get(f"reps_left_{i}", last_reps),
+                        "Left reps", min_value=1,
+                        value=int(st.session_state.get(f"reps_left_{i}", last_reps)),
                         step=1, key=f"reps_left_{i}"
                     )
                     right_reps = sr.number_input(
-                        "Right reps", min_value=1.0,
-                        value=st.session_state.get(f"reps_right_{i}", last_reps),
+                        "Right reps", min_value=1,
+                        value=int(st.session_state.get(f"reps_right_{i}", last_reps)),
                         step=1, key=f"reps_right_{i}"
                     )
                     reps_list.append({"left": left_reps, "right": right_reps})
