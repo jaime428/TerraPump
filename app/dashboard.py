@@ -267,9 +267,7 @@ def tab_dashboard(data: pd.DataFrame):
             stats     = stats_doc.to_dict() if stats_doc.exists else {}
         else:
             stats = {}
-        
-        raw_sets = stats.get("last_sets", 1)
-
+            
         # — unpack last_reps, handling unilateral dicts —
         raw_last_reps = stats.get("last_reps", 8)
         if isinstance(raw_last_reps, dict):
