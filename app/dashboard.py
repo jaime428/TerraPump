@@ -368,7 +368,6 @@ def tab_dashboard(data: pd.DataFrame):
         if len(st.session_state.workout_log) > 1:
             st.markdown("#### Current Workout Log")
 
-            display_log = []
             for idx, entry in enumerate(st.session_state.workout_log[1:], start=1):
                 reps = entry["reps"]
                 if all(isinstance(r, dict) for r in reps):
@@ -381,27 +380,18 @@ def tab_dashboard(data: pd.DataFrame):
                     wt_str = "  ".join(f"{w['left']}/{w['right']}" for w in weights)
                 else:
                     wt_str = "  ".join(str(w) for w in weights)
-                
-                display_log.append({
-                    "Brand":      entry.get("brand", ""),
-                    "Exercise":  entry["exercise"],        
-                    "Attachment": entry.get("attachment", ""),   
-                    "Sets":      entry["sets"],
-                    "Reps":      reps_str,
-                    "Weights":   wt_str
-                })
 
-                cols = st.columns([3,1,1,1,1,1])
-                cols[0].markdown(f"**{entry['exercise']}** ")
-                cols[1].markdown(f"{entry['sets']} sets")
-                cols[2].markdown(reps_str)
-                cols[3].markdown(wt_str)
-                if cols[4].button("❌", key=f"remove_ex_{idx}"):
+                cols = st.columns([2, 2, 2, 1, 2, 2, 1])
+                cols[0].markdown(entry.get("brand", ""))
+                cols[1].markdown(f"**{entry['exercise']}**")
+                cols[2].markdown(entry.get("attachment", ""))
+                cols[3].markdown(f"{entry['sets']} sets")
+                cols[4].markdown(reps_str)
+                cols[5].markdown(wt_str)
+
+                if cols[6].button("❌", key=f"remove_ex_{idx}"):
                     st.session_state.workout_log.pop(idx)
                     st.rerun()
-
-            df_display = pd.DataFrame(display_log)
-            st.dataframe(df_display, use_container_width=True)
 
         if st.button("🏁 End Workout", key="side_end"):
             user_id = st.session_state.user["uid"]
@@ -451,7 +441,6 @@ def tab_dashboard(data: pd.DataFrame):
             workout = data[labels.index(sel)]
 
         # turn its entries into a display table
-            rows = []
             for e in workout["entries"]:
                 # format reps
                 r = e["reps"]
@@ -466,17 +455,8 @@ def tab_dashboard(data: pd.DataFrame):
                 else:
                     wt_str = "  ".join(str(x) for x in wts)
 
-                rows.append({
-                    "Brand": e.get("brand", ""),
-                    "Exercise":   e["exercise"],
-                    "Attachment": e.get("attachment", ""),   
-                    "Sets":       e["sets"],
-                    "Reps":       reps_str,
-                    "Logged At":  e["logged_at"].strftime("%Y-%m-%d %H:%M"),
-                })
+                
 
-            df_past = pd.DataFrame(rows)
-            st.dataframe(df_past, use_container_width=True)
             if st.button("🗑️ Delete Workout", key="del_workout"):
                 doc_id = workout["start"].isoformat()
                 db.collection("users") \
@@ -489,7 +469,7 @@ def tab_dashboard(data: pd.DataFrame):
     # — end Past Workouts —
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
-
+f
 
 # --- Entries Tab ---
 def tab_entries(_):
