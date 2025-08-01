@@ -441,19 +441,31 @@ def tab_dashboard(data: pd.DataFrame):
             workout = data[labels.index(sel)]
 
         # turn its entries into a display table
-            for e in workout["entries"]:
-                # format reps
-                r = e["reps"]
-                if all(isinstance(x, dict) for x in r):
-                    reps_str = "  ".join(f"{x['left']}/{x['right']}" for x in r)
-                else:
-                    reps_str = "  ".join(str(x) for x in r)
-                # format weights
-                wts = e["weights"]
-                if all(isinstance(x, dict) for x in wts):
-                    wt_str = "  ".join(f"{x['left']}/{x['right']}" for x in wts)
-                else:
-                    wt_str = "  ".join(str(x) for x in wts)
+        st.markdown("#### Workout Details")
+        for idx, e in enumerate(workout["entries"], start=1):
+            # format reps / weights
+            if all(isinstance(x, dict) for x in e["reps"]):
+                reps_str = "  ".join(f"{x['left']}/{x['right']}" for x in e["reps"])
+            else:
+                reps_str = "  ".join(str(x) for x in e["reps"])
+            if all(isinstance(x, dict) for x in e["weights"]):
+                wt_str = "  ".join(f"{x['left']}/{x['right']}" for x in e["weights"])
+            else:
+                wt_str = "  ".join(str(x) for x in e["weights"])
+            
+            cols = st.columns([2,3,2,1,2,2,1])
+            cols[0].markdown(e.get("brand",""))
+            cols[1].markdown(f"**{e['exercise']}**")
+            cols[2].markdown(e.get("attachment",""))
+            cols[3].markdown(f"{e['sets']} sets")
+            cols[4].markdown(reps_str)
+            cols[5].markdown(wt_str)
+            if cols[6].button("❌", key=f"remove_past_{idx}"):
+                # delete from Firestore then:
+                workout_id = workout["start"].isoformat()
+                # remove locally too:
+                st.session_state.workout_log.pop(idx)
+                st.rerun()
 
                 
 
