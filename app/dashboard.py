@@ -106,7 +106,7 @@ def tab_dashboard(data: pd.DataFrame):
             key="workout_name"
         )
         st.session_state.workout_log[0]["name"] = new_name
-        st.write(f"**Started at:** {st.session_state.workout_state_time:%Y-%m-%d %H:%M}")
+        st.write(f"**Started at:** {st.session_state.workout_start_time:%Y-%m-%d %H:%M}")
         # 1) Exercise type
         ex_type    = st.selectbox(
             "Exercise type",
@@ -369,7 +369,7 @@ def tab_dashboard(data: pd.DataFrame):
             st.markdown("#### Current Workout Log")
 
             display_log = []
-            for entry in st.session_state.workout_log[1:]:
+            for idx, entry in enumerate(st.session_state.workout_log[1:], start=1):
                 reps = entry["reps"]
                 if all(isinstance(r, dict) for r in reps):
                     reps_str = "  ".join(f"{r['left']}/{r['right']}" for r in reps)
@@ -381,6 +381,15 @@ def tab_dashboard(data: pd.DataFrame):
                     wt_str = "  ".join(f"{w['left']}/{w['right']}" for w in weights)
                 else:
                     wt_str = "  ".join(str(w) for w in weights)
+                
+                display_log.append({
+                    "Brand":      entry.get("brand", ""),
+                    "Exercise":  entry["exercise"],        
+                    "Attachment": entry.get("attachment", ""),   
+                    "Sets":      entry["sets"],
+                    "Reps":      reps_str,
+                    "Weights":   wt_str
+                })
 
                 cols = st.columns([3,1,1,1,1,1])
                 cols[0].markdown(f"**{entry['exercise']}** ")
