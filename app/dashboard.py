@@ -468,15 +468,13 @@ def tab_dashboard(data: pd.DataFrame):
 
             df_past = pd.DataFrame(rows)
             st.dataframe(df_past, use_container_width=True)
-                    # — Delete this saved workout —
             if st.button("🗑️ Delete Workout", key="del_workout"):
-                # the Firestore doc ID is the ISO timestamp we used
                 doc_id = workout["start"].isoformat()
                 db.collection("users") \
-                .document(st.session_state.user["uid"]) \
-                .collection("workouts") \
-                .document(doc_id) \
-                .delete()
+                    .document(st.session_state.user["uid"]) \
+                    .collection("workouts") \
+                    .document(doc_id) \
+                    .delete()
                 st.success("Deleted workout.")
                 st.rerun()
     # — end Past Workouts —
