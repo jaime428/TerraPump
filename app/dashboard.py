@@ -267,9 +267,34 @@ def tab_dashboard(data: pd.DataFrame):
             stats     = stats_doc.to_dict() if stats_doc.exists else {}
         else:
             stats = {}
-
-
+        
         raw_sets = stats.get("last_sets", 1)
+
+        # — unpack last_reps, handling unilateral dicts —
+        raw_last_reps = stats.get("last_reps", 8)
+        if isinstance(raw_last_reps, dict):
+            last_reps_left  = int(raw_last_reps.get("left", 8))
+            last_reps_right = int(raw_last_reps.get("right", 8))
+            # pick an overall default for non-unilateral cases:
+            last_reps       = (last_reps_left + last_reps_right) // 2
+        else:
+            last_reps = int(raw_last_reps)
+            last_reps_left = last_reps_right = last_reps
+
+        # — unpack last_weight, handling unilateral dicts (you may already have this) —
+        raw_last_wt = stats.get("last_weight", default_wt)
+        if isinstance(raw_last_wt, dict):
+            last_wt_left  = raw_last_wt.get("left", default_wt)
+            last_wt_right = raw_last_wt.get("right", default_wt)
+            last_wt       = (last_wt_left + last_wt_right) / 2.0
+        else:
+            last_wt = float(raw_last_wt)
+            last_wt_left = last_wt_right = last_wt
+
+        # now you can safely set:
+        st.session_state.setdefault("sets_count", stats.get("last_sets", 1))
+
+
         try:
             last_sets = int(raw_sets)
         except (TypeError, ValueError):
@@ -365,12 +390,23 @@ def tab_dashboard(data: pd.DataFrame):
                 "logged_at": datetime.datetime.now()
             })
             if unilateral:
-                # weight_list[-1] is a dict {'left':…, 'right':…}
-                last_weight = weight_list[-1]
-                last_reps   = reps_list[-1]
+                left_reps = sr.number_input(
+                    "Left reps", min_value=1,
+                    value=st.session_state.get(f"reps_left_{i}", last_reps_left),
+                    step=1, key=f"reps_left_{i}"
+                )
+                right_reps = sr.number_input(
+                    "Right reps", min_value=1,
+                    value=st.session_state.get(f"reps_right_{i}", last_reps_right),
+                    step=1, key=f"reps_right_{i}"
+                )
+            
             else:
-                last_weight = weight_list[-1]
-                last_reps   = reps_list[-1]
+                r = sr.number_input(
+                    "Reps", min_value=1,
+                    value=st.session_state.get(f"reps_{i}", last_reps),
+                    step=1, key=f"reps_{i}"
+                )
 
             # 3) save into exercise_stats under your user
             user_id = st.session_state.user["uid"]
