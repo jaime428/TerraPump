@@ -267,7 +267,7 @@ def tab_dashboard(data: pd.DataFrame):
             stats     = stats_doc.to_dict() if stats_doc.exists else {}
         else:
             stats = {}
-            
+
         # — unpack last_reps, handling unilateral dicts —
         raw_last_reps = stats.get("last_reps", 8)
         if isinstance(raw_last_reps, dict):
@@ -292,7 +292,7 @@ def tab_dashboard(data: pd.DataFrame):
         # now you can safely set:
         st.session_state.setdefault("sets_count", stats.get("last_sets", 1))
 
-
+        raw_sets = stats.get("last_sets")
         try:
             last_sets = int(raw_sets)
         except (TypeError, ValueError):
