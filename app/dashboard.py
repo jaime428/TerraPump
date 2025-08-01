@@ -99,8 +99,14 @@ def tab_dashboard(data: pd.DataFrame):
             st.rerun()
 
     else:
-        st.write(f"**Started at:** {st.session_state.workout_start_time:%Y-%m-%d %H:%M}")
-
+        st.session_state.setdefault("workout_log", [{"name": "", "start": None}])
+        new_name = st.text_input(
+            "Workout Name",
+            value = st.session_state.workout_log[0]["name"],
+            key="workout_name"
+        )
+        st.session_state.workout_log[0]["name"] = new_name
+        st.write(f"**Started at:** {st.session_state.workout_state_time:%Y-%m-%d %H:%M}")
         # 1) Exercise type
         ex_type    = st.selectbox(
             "Exercise type",
@@ -376,14 +382,14 @@ def tab_dashboard(data: pd.DataFrame):
                 else:
                     wt_str = "  ".join(str(w) for w in weights)
 
-                display_log.append({
-                    "Brand":      entry.get("brand", ""),
-                    "Exercise":  entry["exercise"],        
-                    "Attachment": entry.get("attachment", ""),   
-                    "Sets":      entry["sets"],
-                    "Reps":      reps_str,
-                    "Weights":   wt_str
-                })
+                cols = st.columns([3,1,1,1,1,1])
+                cols[0].markdown(f"**{entry['exercise']}** ")
+                cols[1].markdown(f"{entry['sets']} sets")
+                cols[2].markdown(reps_str)
+                cols[3].markdown(wt_str)
+                if cols[4].button("❌", key=f"remove_ex_{idx}"):
+                    st.session_state.workout_log.pop(idx)
+                    st.rerun()
 
             df_display = pd.DataFrame(display_log)
             st.dataframe(df_display, use_container_width=True)
@@ -462,6 +468,17 @@ def tab_dashboard(data: pd.DataFrame):
 
             df_past = pd.DataFrame(rows)
             st.dataframe(df_past, use_container_width=True)
+                    # — Delete this saved workout —
+            if st.button("🗑️ Delete Workout", key="del_workout"):
+                # the Firestore doc ID is the ISO timestamp we used
+                doc_id = workout["start"].isoformat()
+                db.collection("users") \
+                .document(st.session_state.user["uid"]) \
+                .collection("workouts") \
+                .document(doc_id) \
+                .delete()
+                st.success("Deleted workout.")
+                st.rerun()
     # — end Past Workouts —
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
