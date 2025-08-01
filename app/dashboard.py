@@ -469,13 +469,14 @@ def tab_dashboard(data: pd.DataFrame):
 
                 
 
-            if st.button("🗑️ Delete Workout", key="del_workout"):
-                doc_id = workout["start"].isoformat()
+            doc_id = workout["start"].isoformat()
+            btn_key = f"del_workout_{doc_id}"
+            if st.button("🗑️ Delete Workout", key=btn_key):
                 db.collection("users") \
-                    .document(st.session_state.user["uid"]) \
-                    .collection("workouts") \
-                    .document(doc_id) \
-                    .delete()
+                .document(st.session_state.user["uid"]) \
+                .collection("workouts") \
+                .document(doc_id) \
+                .delete()
                 st.success("Deleted workout.")
                 st.rerun()
     # — end Past Workouts —
