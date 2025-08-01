@@ -269,7 +269,7 @@ def tab_dashboard(data: pd.DataFrame):
             stats = {}
 
         last_sets = stats.get("last_sets", 1)
-        last_reps = stats.get("last_reps", 8)
+        last_reps = int(stats.get("last_reps", 8))
         last_wt   = stats.get("last_weight", default_wt)
         st.session_state.setdefault("sets_count", last_sets)
             
@@ -285,6 +285,7 @@ def tab_dashboard(data: pd.DataFrame):
             reps_list = []
             weight_list = []
             for i in range(1, st.session_state.sets_count + 1):
+                
                 cm, cw = st.columns([3, 2])
                 sm, sr = cm.columns([1, 7])
                 sm.markdown(f"**Set {i}**")
@@ -313,9 +314,11 @@ def tab_dashboard(data: pd.DataFrame):
                     weight_list.append({"left": left_wt, "right": right_wt})
                 else:
                     r = sr.number_input(
-                        "Reps", min_value=1.0,
+                        "Reps", 
+                        min_value=1.0,
                         value=st.session_state.get(f"reps_{i}", last_reps),
-                        step=1, key=f"reps_{i}"
+                        step=1, 
+                        key=f"reps_{i}"
                     )
                     reps_list.append(r)
                     w = cw.number_input(
