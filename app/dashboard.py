@@ -441,7 +441,7 @@ def tab_dashboard(data: pd.DataFrame):
             wk_idx = labels.index(sel) - 1
             workout = data[wk_idx + 1]
 
-            st.markdown("#### Workout Details")
+            st.markdown(f"### {workout['name']}  ({workout['start']:%Y-%m-%d %H:%M})")
             for ex_idx, e in enumerate(workout["entries"], start=1):
                 reps = e["reps"]
                 reps_str = (
