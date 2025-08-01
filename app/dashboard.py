@@ -469,7 +469,7 @@ def tab_dashboard(data: pd.DataFrame):
     # — end Past Workouts —
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
-f
+
 
 # --- Entries Tab ---
 def tab_entries(_):
