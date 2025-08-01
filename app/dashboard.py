@@ -140,6 +140,8 @@ def tab_dashboard(data: pd.DataFrame):
 
         ex = ""       
         machine_docs = []
+        attach_name = None
+        brand_name = None
        
 
         if ex_type == "Cable":
