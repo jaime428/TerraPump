@@ -323,10 +323,8 @@ def tab_dashboard(data: pd.DataFrame):
         # 8) Handle buttons
         if b1:
             st.session_state.sets_count += 1
-            st.rerun()
         elif b2 and st.session_state.sets_count > 1:
             st.session_state.sets_count -= 1
-            st.rerun()
         elif submit:
             st.session_state.workout_log.append({
                 "exercise": ex,
@@ -665,6 +663,7 @@ def tab_admin(_=None):
                     st.success(f"Deleted {machine_name}")
                     st.rerun()
 
+
                 # Edit Machine
                 if cols[2].button(
                     "✏️",
@@ -723,7 +722,7 @@ def tab_admin(_=None):
         with st.form("machine_form", clear_on_submit=True):
             machine_name    = st.text_input("Machine name")
             machine_type    = st.selectbox("Type", ["Machine","Plate-loaded","Cable","Barbell","Dumbbell","Bodyweight"])
-            default_weight  = st.number_input("Default starting weight", min_value=20.0, step=1.0)
+            default_weight  = st.number_input("Default starting weight", min_value=10.0, step=1.0)
             subtype        = st.text_input("Subtype (optional)", help="e.g. smith, angled, lever")
             add_machine     = st.form_submit_button("➕ Add Machine")
         if add_machine:
