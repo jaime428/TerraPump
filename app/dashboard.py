@@ -269,9 +269,15 @@ def tab_dashboard(data: pd.DataFrame):
         last_reps = stats.get("last_reps", 8)
         last_wt   = stats.get("last_weight", default_wt)
         st.session_state.setdefault("sets_count", last_sets)
+            
+        # 7) Add / Remove Set controls (outside the form)
+        c1, c2 = st.columns([1,1])
+        if c1.button("➕ Add Set"):
+            st.session_state.sets_count += 1
+        if c2.button("➖ Remove Set") and st.session_state.sets_count > 1:
+            st.session_state.sets_count -= 1
 
-        # 7) Form for Reps / Weights / Buttons
-
+        # 8) Form for Reps / Weights + single submit
         with st.form("exercise_form", clear_on_submit=False):
             reps_list = []
             weight_list = []
@@ -316,18 +322,9 @@ def tab_dashboard(data: pd.DataFrame):
                     )
                     weight_list.append(w)
 
-            b1, b2, submit = st.columns(3)
-
-            b1        = st.form_submit_button("➕ Add Set")
-            b2        = st.form_submit_button("➖ Remove Set")
-            submit    = st.form_submit_button("✔ Add to Workout")
-
-        # 8) Handle buttons
-        if b1:
-            st.session_state.sets_count += 1
-        elif b2 and st.session_state.sets_count > 1:
-            st.session_state.sets_count -= 1
-        elif submit:
+            submit = st.form_submit_button("✔ Add to Workout")
+        
+        if submit:
             st.session_state.workout_log.append({
                 "exercise": ex,
                 "attachment" : attach_name,
@@ -457,7 +454,9 @@ def tab_dashboard(data: pd.DataFrame):
                     wt_str = "  ".join(str(x) for x in wts)
 
                 rows.append({
+                    "Brand": e.get("brand", "")
                     "Exercise":   e["exercise"],
+                    "Attachment": e.get("attachment", ""),   
                     "Sets":       e["sets"],
                     "Reps":       reps_str,
                     "Logged At":  e["logged_at"].strftime("%Y-%m-%d %H:%M"),
