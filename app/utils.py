@@ -24,12 +24,13 @@ def show_login_page():
     email = st.text_input("Email", key="login_email")
     pw = st.text_input("Password", type="password", key="login_password")
 
-    if st.button("Log in"):
+    if st.button("Login"):
         try:
             user = auth.sign_in_with_email_and_password(email, pw)
+
             uid = user["localId"]
             email = user.get("email", email)
-
+            
             # --- ensure there’s a users/{uid} doc ---
             user_ref = db.collection("users").document(uid)
             if not user_ref.get().exists:
@@ -40,8 +41,7 @@ def show_login_page():
 
             # now store in session_state
             st.session_state.user = {"uid": uid, "email": email}
-            st.session_state.page = "dashboard"
-            st.success("✅ Logged in!")
+            st.session_state.page = "Dashboard & Workout"
             st.rerun()
 
         except Exception as e:
@@ -133,8 +133,13 @@ def fetch_exercise_library():
 def fetch_attachments():
     docs = db.collection("attachments").stream()
     # each dict will have whatever fields you set in Firestore,
-    # e.g. {"name":"EZ Bar","type":"Cable","default_weight":20}
+    # e.g. {"name":"EZ Bar","type":"Cable"}
     return [doc.to_dict() for doc in docs]
 
-
+def resolve_default_wt(item: dict, fallback: float) -> float:
+    if "default_starting_weight" in item:
+        return float(item["default_starting_weight"])
+    if "default_weight" in item:
+        return float(item(["default_weight"]))
+    return fallback
 

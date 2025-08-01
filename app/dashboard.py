@@ -1,4 +1,4 @@
-APP_VERSION = "0.52"
+APP_VERSION = "0.53"
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -24,7 +24,9 @@ from app.utils import (
 from app.firebase_config import db, auth
 
 
-@st.cache_data
+@st.cache_data(ttl=3600)
+def get_entries_cached(uid: str):
+    return fetch_all_entries(uid)
 
 def build_series_dict(df: pd.DataFrame):
     dates = pd.to_datetime(df['Date']).dt.normalize()
@@ -141,24 +143,38 @@ def tab_dashboard(data: pd.DataFrame):
        
 
         if ex_type == "Cable":
-            # Pull all attachments, then filter to only type “Cable”
-            all_atts   = fetch_attachments()
-            cable_atts = [a for a in all_atts if a.get("type","").strip().lower()=="cable"]
-            if not cable_atts:
-                st.warning("No cable attachments found.")
-                machine_docs = []  # fallback back to library/text
-            else:
-                names = [a.get("name","<no name>") for a in cable_atts]
-                sel   = st.selectbox("Attachment", ["–– pick one ––"] + names, key="cable_select")
+            # 1️⃣ Cable exercises from your library
+            cable_exercises = [e["name"] for e in filtered_lib]
+            choice_ex = st.selectbox(
+                "Pick cable exercise",
+                ["–– pick one ––"] + cable_exercises,
+                key="cable_ex"
+            )
 
-                if sel != "–– pick one ––":
-                    attach     = next(a for a in cable_atts if a["name"] == sel)
-                    ex         = attach["name"]                          # 📌 set the exercise
-                    default_wt = resolve_default_wt(attach, default_wt)
-                    
+            if choice_ex != "–– pick one ––":
+                ex = choice_ex
+                # 2️⃣ Now pull only the attachments
+                all_atts   = fetch_attachments()
+                cable_atts = [
+                    a for a in all_atts
+                    if a.get("type","").strip().lower() == "cable"
+                ]
 
-                # block out the other fallbacks
-                machine_docs = ["__cable_selected__"]
+                if not cable_atts:
+                    st.warning("No cable attachments found.")
+                else:
+                    att_names = [a["name"] for a in cable_atts]
+                    choice_att = st.selectbox(
+                        "Select attachment",
+                        ["–– pick one ––"] + att_names,
+                        key="cable_att"
+                    )
+                    if choice_att != "–– pick one ––":
+                        attach     = next(a for a in cable_atts if a["name"] == choice_att)
+                        default_wt = resolve_default_wt(attach, default_wt)
+                        machine_docs = ["__cable_selected__"]
+                        attach_name = choice_att
+
 
         # 4) BRAND + MACHINE selectors (outside the form)
         elif ex_type in ("Machine","Plate-loaded"):
@@ -189,10 +205,12 @@ def tab_dashboard(data: pd.DataFrame):
                     ex          = sel_name
                     md          = machines_ref.document(selected.id).get().to_dict()
                     default_wt = resolve_default_wt(md, default_wt)
+                    brand_name = sel_brand
                     st.info(f"💡 Default starting weight for **{ex}**: {default_wt} lbs")
 
+
         # 5) LIBRARY or FREE-TEXT fallback (if no machine chosen)
-        if not machine_docs:
+        if ex_type != "Cable" and not machine_docs:
             if filtered_lib:
                 names  = [e["name"] for e in filtered_lib]
                 choice = st.selectbox(
@@ -312,6 +330,8 @@ def tab_dashboard(data: pd.DataFrame):
         elif submit:
             st.session_state.workout_log.append({
                 "exercise": ex,
+                "attachment" : attach_name,
+                "brand" : brand_name,
                 "sets":     sets_count,
                 "reps":     reps_list,
                 "weights":  weight_list,
@@ -788,10 +808,13 @@ def main():
     # Auth guard
     if not st.session_state.get('user'):
         hide_sidebar()
-        return show_login_page() if st.session_state.page!='signup' else show_signup_page()
-
+        if st.session_state.page != 'signup':
+            show_login_page()
+        else:
+            show_signup_page()
+        return
     # Fetch data
-    data = fetch_all_entries(st.session_state.user['uid'])
+    data = get_entries_cached(st.session_state.user['uid'])
 
     # Sidebar navigation
     nav_items = [
