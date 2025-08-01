@@ -285,6 +285,9 @@ def tab_dashboard(data: pd.DataFrame):
         else:
             # single‐value case: use it for both sides
             last_wt_left = last_wt_right = float(raw_last_wt)
+            
+        last_wt = (last_wt_left + last_wt_right) / 2.0
+
 
         # init session
         st.session_state.setdefault("sets_count", last_sets)
