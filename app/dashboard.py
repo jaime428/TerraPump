@@ -280,10 +280,11 @@ def tab_dashboard(data: pd.DataFrame):
         # weight default
         raw_last_wt = stats.get("last_weight", default_wt)
         if isinstance(raw_last_wt, dict):
-            l, r = raw_last_wt["left"], raw_last_wt["right"]
-            last_wt = (l+r)/2
+            last_wt_left  = float(raw_last_wt.get("left",  default_wt))
+            last_wt_right = float(raw_last_wt.get("right", default_wt))
         else:
-            last_wt = float(raw_last_wt)
+            # single‐value case: use it for both sides
+            last_wt_left = last_wt_right = float(raw_last_wt)
 
         # init session
         st.session_state.setdefault("sets_count", last_sets)
@@ -306,15 +307,20 @@ def tab_dashboard(data: pd.DataFrame):
                 sm.markdown(f"**Set {i}**")
                 if st.session_state["unilateral"]:
                     left_reps = sr.number_input(
-                        "Left reps", min_value=1,
+                        "Left reps", 
+                        min_value=1,
                         value=int(st.session_state.get(f"reps_left_{i}", last_reps)),
-                        step=1, key=f"reps_left_{i}"
+                        step=1,
+                        key=f"reps_left_{i}"
                     )
                     right_reps = sr.number_input(
-                        "Right reps", min_value=1,
+                        "Right reps", 
+                        min_value=1,
                         value=int(st.session_state.get(f"reps_right_{i}", last_reps)),
-                        step=1, key=f"reps_right_{i}"
+                        step=1, 
+                        key=f"reps_right_{i}"
                     )
+                    
                     reps_list.append({"left": left_reps, "right": right_reps})
                     left_wt = cw.number_input(
                         "Left weight (lbs)", min_value=0.0,
