@@ -114,10 +114,7 @@ def tab_dashboard(data: pd.DataFrame):
             "Unilateral exercise? (separate left/right reps & weights)",
             value=st.session_state["unilateral"],
             key="unilateral"
-        )
-
-        sets_count = st.session_state.sets_count
-        
+        )        
 
         # 2) Default weight for pure Barbell
         type_defaults = {"Barbell": 45.0}
@@ -281,7 +278,7 @@ def tab_dashboard(data: pd.DataFrame):
         with st.form("exercise_form", clear_on_submit=False):
             reps_list = []
             weight_list = []
-            for i in range(1, sets_count + 1):
+            for i in range(1, st.session_state.sets_count + 1):
                 cm, cw = st.columns([3, 2])
                 sm, sr = cm.columns([1, 7])
                 sm.markdown(f"**Set {i}**")
@@ -329,7 +326,7 @@ def tab_dashboard(data: pd.DataFrame):
                 "exercise": ex,
                 "attachment" : attach_name,
                 "brand" : brand_name,
-                "sets":     sets_count,
+                "sets":     st.session_state.sets_count,
                 "reps":     reps_list,
                 "weights":  weight_list,
                 "unilateral" : unilateral,
@@ -353,12 +350,13 @@ def tab_dashboard(data: pd.DataFrame):
                 .document(slug)
 
             stats_ref.set({
-                "last_sets":   sets_count,
+                "last_sets":   st.session_state.sets_count,
                 "last_reps":   last_reps,
                 "last_weight": last_weight
             }, merge=True)
 
-            st.success(f"Added {ex}: {sets_count} sets (stats updated)")
+            st.session_state.sets_count = 1
+            st.success(f"Added {ex}: {st.session_state.sets_count} sets (stats updated)")
 
         # 9) Live log + End button
         if len(st.session_state.workout_log) > 1:
