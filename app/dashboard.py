@@ -438,43 +438,38 @@ def tab_dashboard(data: pd.DataFrame):
 
         sel = st.selectbox("", labels, index=0, key="past_wkt")
         if sel!= placeholder:
+            idx = labels.index(sel) - 1
             workout = data[labels.index(sel)]
-
-        # turn its entries into a display table
-        st.markdown("#### Workout Details")
-        for idx, e in enumerate(workout["entries"], start=1):
-            # format reps / weights
-            if all(isinstance(x, dict) for x in e["reps"]):
-                reps_str = "  ".join(f"{x['left']}/{x['right']}" for x in e["reps"])
-            else:
-                reps_str = "  ".join(str(x) for x in e["reps"])
-            if all(isinstance(x, dict) for x in e["weights"]):
-                wt_str = "  ".join(f"{x['left']}/{x['right']}" for x in e["weights"])
-            else:
-                wt_str = "  ".join(str(x) for x in e["weights"])
-            
-            cols = st.columns([2,3,2,1,2,2,1])
-            cols[0].markdown(e.get("brand",""))
-            cols[1].markdown(f"**{e['exercise']}**")
-            cols[2].markdown(e.get("attachment",""))
-            cols[3].markdown(f"{e['sets']} sets")
-            cols[4].markdown(reps_str)
-            cols[5].markdown(wt_str)
-            doc_id = workout["start"].isoformat()
-            btn_key = f"del_workout_{doc_id}"
-            if st.button("🗑️ Delete Workout", key=btn_key):
-                db.collection("users") \
-                .document(st.session_state.user["uid"]) \
-                .collection("workouts") \
-                .document(doc_id) \
-                .delete()
-                st.success("Deleted workout.")
-                st.rerun()
-
+            st.markdown("#### Workout Details")
+            for idx, e in enumerate(workout["entries"], start=1):
+                # format reps / weights
+                if all(isinstance(x, dict) for x in e["reps"]):
+                    reps_str = "  ".join(f"{x['left']}/{x['right']}" for x in e["reps"])
+                else:
+                    reps_str = "  ".join(str(x) for x in e["reps"])
+                if all(isinstance(x, dict) for x in e["weights"]):
+                    wt_str = "  ".join(f"{x['left']}/{x['right']}" for x in e["weights"])
+                else:
+                    wt_str = "  ".join(str(x) for x in e["weights"])
                 
-
-            
-            
+                cols = st.columns([2,3,2,1,2,2,1])
+                cols[0].markdown(e.get("brand",""))
+                cols[1].markdown(f"**{e['exercise']}**")
+                cols[2].markdown(e.get("attachment",""))
+                cols[3].markdown(f"{e['sets']} sets")
+                cols[4].markdown(reps_str)
+                cols[5].markdown(wt_str)
+                doc_id = workout["start"].isoformat()
+                btn_key = f"del_workout_{doc_id}"
+                if st.button("🗑️ Delete Workout", key=btn_key):
+                    db.collection("users") \
+                    .document(st.session_state.user["uid"]) \
+                    .collection("workouts") \
+                    .document(doc_id) \
+                    .delete()
+                    st.success("Deleted workout.")
+                    st.rerun()
+                        
     # — end Past Workouts —
     st.markdown("</div>", unsafe_allow_html=True)
     st.markdown("---")
