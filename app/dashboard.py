@@ -196,6 +196,7 @@ def tab_dashboard(data: pd.DataFrame):
                 bid          = mapping[sel_brand]
                 machines_ref = db.collection("brands").document(bid).collection("machines")
                 all_machines = list(machines_ref.stream())
+                
                 slug_type    = slugify(ex_type)
                 machine_docs = [
                     d for d in all_machines
@@ -215,7 +216,7 @@ def tab_dashboard(data: pd.DataFrame):
 
 
         # 5) LIBRARY or FREE-TEXT fallback (if no machine chosen)
-        if ex_type != "Cable" and not machine_docs:
+        if ex_type != "Cable" and not machine_docs and not ex:
             if filtered_lib:
                 names  = [e["name"] for e in filtered_lib]
                 choice = st.selectbox(
