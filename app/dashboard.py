@@ -783,7 +783,7 @@ def tab_admin(_=None):
                 payload = {
                     "name":                   machine_name,
                     "type":                   machine_type,
-                    "default_starting_weight": default_wt
+                    "default_starting_weight": default_weight
                 }
                 if subtype.strip():
                     payload["subtype"] = subtype.strip().lower()
