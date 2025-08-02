@@ -369,9 +369,12 @@ def tab_dashboard(data: pd.DataFrame):
             })
             
             if unilateral:
-                last_weight = {"left": weight_list[-1]["left"], "right": weight_list[-1]["right"]}
+                last_weight = weight_list[-1]
+                last_reps = reps_list[-1]
             else:
                 last_weight = weight_list[-1]
+                last_reps = reps_list[-1]
+
 
             # 3) save into exercise_stats under your user
             user_id = st.session_state.user["uid"]
