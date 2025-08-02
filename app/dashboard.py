@@ -824,7 +824,7 @@ def tab_admin(_=None):
             payload = {
                 "name": ex_name,
                 "type": lib_type,
-                "default_weight" : default_weight
+                "default_weight" : default_wt
             }
             # only include if non-zero / non-empty
             if subtype.strip():
