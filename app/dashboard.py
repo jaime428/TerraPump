@@ -405,6 +405,7 @@ def tab_dashboard(data: pd.DataFrame):
             header[4].markdown("**Reps**")
             header[5].markdown("**Weight**")
             header[6].markdown("**Remove**")
+            
             for idx, entry in enumerate(st.session_state.workout_log[1:], start=1):
                 reps = entry["reps"]
                 if all(isinstance(r, dict) for r in reps):
@@ -782,7 +783,7 @@ def tab_admin(_=None):
                 payload = {
                     "name":                   machine_name,
                     "type":                   machine_type,
-                    "default_starting_weight": default_weight
+                    "default_starting_weight": default_wt
                 }
                 if subtype.strip():
                     payload["subtype"] = subtype.strip().lower()
