@@ -469,14 +469,10 @@ def tab_dashboard(data: pd.DataFrame):
         st.info("You haven't saved any workouts yet.")
     else:
         # build a picklist of "Workout name (YYYY-MM-DD HH:MM)"
-        placeholder = "Select a workout..."
-        labels = [placeholder]
-        data = [None]
-        for doc in docs:
-            w = doc.to_dict()
-            ts = w["start"]  # this is a Python datetime
-            labels.append(f"{w['name']} ({ts:%Y-%m-%d %H:%M})")
-            data.append(w)
+        placeholder = "–– pick one ––"
+        labels = [placeholder] + [
+            f"{w['start'].strftime('%Y-%m-%d')} – {w.get('title','Workout')}" for w in data
+        ]
 
         sel = st.selectbox("Pick a past workout", labels, key="past_wkt")
         if sel != placeholder:
