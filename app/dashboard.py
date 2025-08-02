@@ -188,10 +188,13 @@ def tab_dashboard(data: pd.DataFrame):
             mapping = dict(zip(display, brands))
 
             sel_brand = st.selectbox(
-                "Brand",
+                "Select Brand",
                 ["–– pick one ––"] + display,
                 key="brand_select"
-            )
+            )  
+
+            machine_docs = []
+            
             if sel_brand != "–– pick one ––":
                 bid          = mapping[sel_brand]
                 machines_ref = db.collection("brands").document(bid).collection("machines")
