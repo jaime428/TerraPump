@@ -470,13 +470,13 @@ def tab_dashboard(data: pd.DataFrame):
     else:
         # build a picklist of "Workout name (YYYY-MM-DD HH:MM)"
         data = [d.to_dict() for d in docs]
-        placeholder = "–– pick one ––"
         for w in data:
             if isinstance(w.get("start"), str):
                 w["start"] = datetime.datetime.fromisoformat(w["start"])
             elif hasattr(w.get("start"), "to_datetime"):  # Firestore Timestamp
                 w["start"] = w["start"].to_datetime()
 
+        placeholder = "–– pick one ––"
         labels = [placeholder] + [
             f"{w['start'].strftime('%Y-%m-%d')} – {w.get('title','Workout')}" for w in data
         ]
