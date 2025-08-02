@@ -194,7 +194,7 @@ def tab_dashboard(data: pd.DataFrame):
             )  
 
             machine_docs = []
-            
+
             if sel_brand != "–– pick one ––":
                 bid          = mapping[sel_brand]
                 machines_ref = db.collection("brands").document(bid).collection("machines")
@@ -480,40 +480,24 @@ def tab_dashboard(data: pd.DataFrame):
 
         sel = st.selectbox("", labels, index=0, key="past_wkt")
         if sel!= placeholder:
-            wk_idx = labels.index(sel) - 1
-            workout = data[wk_idx + 1]
+            # Step 1: get the doc ID (used in save too!)
+            ts_key = workout["start"]
+            if isinstance(ts_key, str):
+                ts_key = datetime.datetime.fromisoformat(ts_key)
+            doc_id = ts_key.isoformat()
 
-            st.markdown(f"### {workout['name']}  ({workout['start']:%Y-%m-%d %H:%M})")
-            for ex_idx, e in enumerate(workout["entries"], start=1):
-                reps = e["reps"]
-                reps_str = (
-                    "  ".join(f"{r['left']}/{r['right']}" for r in reps)
-                    if isinstance(reps[0], dict)
-                    else "  ".join(str(r) for r in reps)
-                )
-                wt = e["weights"]
-                wt_str = (
-                    "  ".join(f"{w['left']}/{w['right']}" for w in wt)
-                    if isinstance(wt[0], dict)
-                    else "  ".join(str(w) for w in wt)
-                )
-                cols = st.columns([2, 3, 2, 2, 2, 2])
-                cols[0].markdown(e.get("brand", ""))
-                cols[1].markdown(f"**{e['exercise']}**")
-                cols[2].markdown(e.get("attachment", ""))
-                cols[3].markdown(f"{e['sets']} sets")
-                cols[4].markdown(f"{reps_str} reps")
-                cols[5].markdown(f"{wt_str} lbs")
-
-            delete_key = f"del_workout_{wk_idx}"
-            if st.button("🗑️ Delete Workout", key=delete_key):
-                db.collection("users") \
-                .document(st.session_state.user["uid"]) \
-                .collection("workouts") \
-                .document(workout["start"].isoformat()) \
-                .delete()
-                st.success("Deleted workout.")
-                st.rerun()
+            # Step 2: delete the document
+            if st.button("🗑️ Delete Workout", key=f"del_workout_{wk_idx}"):
+                try:
+                    db.collection("users") \
+                    .document(st.session_state.user["uid"]) \
+                    .collection("workouts") \
+                    .document(doc_id) \
+                    .delete()
+                    st.success("Deleted workout.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Failed to delete: {e}")
                         
     # — end Past Workouts —
     st.markdown("</div>", unsafe_allow_html=True)
