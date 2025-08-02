@@ -478,30 +478,28 @@ def tab_dashboard(data: pd.DataFrame):
             labels.append(f"{w['name']} ({ts:%Y-%m-%d %H:%M})")
             data.append(w)
 
-        sel = st.selectbox("", labels, index=0, key="past_wkt")
-        if sel!= placeholder:
-            # Step 1: get the doc ID (used in save too!)
-            ts_key = workout["start"]
+        sel = st.selectbox("Pick a past workout", labels, key="past_wkt")
+        if sel != placeholder:
+            wk_idx = labels.index(sel) - 1
+            workout = data[wk_idx]
+
+            # 🔒 Validate we have 'start'
+            ts_key = workout.get("start")
             if isinstance(ts_key, str):
                 ts_key = datetime.datetime.fromisoformat(ts_key)
             doc_id = ts_key.isoformat()
 
-            # Step 2: delete the document
             if st.button("🗑️ Delete Workout", key=f"del_workout_{wk_idx}"):
-                try:
-                    db.collection("users") \
-                    .document(st.session_state.user["uid"]) \
-                    .collection("workouts") \
-                    .document(doc_id) \
-                    .delete()
-                    st.success("Deleted workout.")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Failed to delete: {e}")
-                        
-    # — end Past Workouts —
-    st.markdown("</div>", unsafe_allow_html=True)
-    st.markdown("---")
+                db.collection("users") \
+                .document(st.session_state.user["uid"]) \
+                .collection("workouts") \
+                .document(doc_id) \
+                .delete()
+                st.success("Deleted workout.")
+                st.rerun()
+            # — end Past Workouts —
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("---")
 
 
 # --- Entries Tab ---
