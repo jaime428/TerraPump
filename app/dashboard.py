@@ -397,7 +397,14 @@ def tab_dashboard(data: pd.DataFrame):
         # 9) Live log + End button
         if len(st.session_state.workout_log) > 1:
             st.markdown("#### Current Workout Log")
-
+            header = st.columns([2, 2, 2, 1, 2, 2, 1])
+            header[0].markdown("**Brand**")
+            header[1].markdown("**Exercise**")
+            header[2].markdown("**Attachment**")
+            header[3].markdown("**Sets**")
+            header[4].markdown("**Reps**")
+            header[5].markdown("**Weight**")
+            header[6].markdown("**Remove**")
             for idx, entry in enumerate(st.session_state.workout_log[1:], start=1):
                 reps = entry["reps"]
                 if all(isinstance(r, dict) for r in reps):
