@@ -285,7 +285,7 @@ def tab_dashboard(data: pd.DataFrame):
         else:
             # single‐value case: use it for both sides
             last_wt_left = last_wt_right = float(raw_last_wt)
-            
+
         last_wt = (last_wt_left + last_wt_right) / 2.0
 
 
@@ -367,24 +367,11 @@ def tab_dashboard(data: pd.DataFrame):
                 "unilateral" : unilateral,
                 "logged_at": datetime.datetime.now()
             })
-            if unilateral:
-                left_reps = sr.number_input(
-                    "Left reps", min_value=1,
-                    value=st.session_state.get(f"reps_left_{i}", last_reps_left),
-                    step=1, key=f"reps_left_{i}"
-                )
-                right_reps = sr.number_input(
-                    "Right reps", min_value=1,
-                    value=st.session_state.get(f"reps_right_{i}", last_reps_right),
-                    step=1, key=f"reps_right_{i}"
-                )
             
+            if unilateral:
+                last_weight = {"left": weight_list[-1]["left"], "right": weight_list[-1]["right"]}
             else:
-                r = sr.number_input(
-                    "Reps", min_value=1,
-                    value=st.session_state.get(f"reps_{i}", last_reps),
-                    step=1, key=f"reps_{i}"
-                )
+                last_weight = weight_list[-1]
 
             # 3) save into exercise_stats under your user
             user_id = st.session_state.user["uid"]
