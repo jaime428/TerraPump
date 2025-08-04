@@ -47,11 +47,31 @@ def tab_dashboard(data: pd.DataFrame):
             data[key] = 0
     series = build_series_dict(data)
 
-    # Workout state defaults
-    st.session_state.setdefault('workout_log', [])
-    st.session_state.setdefault('workout_started', False)
-    st.session_state.setdefault('workout_start_time', None)
-    st.session_state.setdefault('sets_count', 1)
+    # ——————— Restore saved workout (if any) ———————
+    if "workout_started" not in st.session_state:
+        st.session_state.workout_started = False
+
+    if "workout_log" not in st.session_state:
+        user_ref = db.collection("users").document(st.session_state.user["uid"])
+        doc = user_ref.get()
+        active_log = doc.to_dict().get("active_log", [])
+
+        if active_log:
+            # ✅ Resume saved workout
+            st.session_state.workout_log = active_log
+            st.session_state.workout_started = True
+            st.session_state.workout_start_time = active_log[0].get("start", datetime.datetime.now())
+            st.session_state.sets_count = 1
+            st.session_state.log_dirty = False
+            st.toast("🔁 Resumed saved workout", icon="🔄")
+        else:
+            st.session_state.workout_log = []
+            st.session_state.sets_count = 1
+
+    if "workout_log" not in st.session_state:
+        user_ref = db.collection("users").document(st.session_state.user["uid"])
+        doc = user_ref.get()
+        st.session_state.workout_log = doc.to_dict().get("active_log", [])
 
     # Header + Quick Stats (unchanged)
     st.markdown("<h1 style='text-align:center;'>TerraPump</h1>", unsafe_allow_html=True)
@@ -83,7 +103,7 @@ def tab_dashboard(data: pd.DataFrame):
     # —————————————————————————————————————————
     st.markdown("### Workout")
     st.markdown("<div style='background:#222;border-radius:8px; padding:1rem;'>", unsafe_allow_html=True)
-
+    
     if not st.session_state.workout_started:
         name = st.text_input(
             "Name",
@@ -180,7 +200,6 @@ def tab_dashboard(data: pd.DataFrame):
                         machine_docs = ["__cable_selected__"]
                         attach_name = choice_att
 
-
         # 4) BRAND + MACHINE selectors (outside the form)
         elif ex_type in ("Machine","Plate-loaded"):
             brands  = [b.id for b in db.collection("brands").stream()]
@@ -258,7 +277,7 @@ def tab_dashboard(data: pd.DataFrame):
             else:
                 ex = st.text_input("Exercise name", key="free_ex_name")
 
-        # 6) Stats lookup
+            # 6) Stats lookup
         if ex:
             slug      = slugify(ex)
             stats_doc = (
@@ -291,6 +310,29 @@ def tab_dashboard(data: pd.DataFrame):
             last_wt_left = last_wt_right = float(raw_last_wt)
 
         last_wt = (last_wt_left + last_wt_right) / 2.0
+
+        # ℹ️ Display Previous Stats
+        if stats:
+            st.markdown("##### ℹ️ Previous Stats")
+            col1, col2, col3 = st.columns(3)
+            
+            col1.metric("Sets", last_sets)
+            
+            # Show reps
+            if isinstance(raw_last_reps, dict):
+                l = raw_last_reps.get("left", "?")
+                r = raw_last_reps.get("right", "?")
+                col2.metric("Reps", f"{l} / {r}")
+            else:
+                col2.metric("Reps", str(last_reps))
+
+            # Show weight
+            if isinstance(raw_last_wt, dict):
+                wl = raw_last_wt.get("left", "?")
+                wr = raw_last_wt.get("right", "?")
+                col3.metric("Weight", f"{wl} / {wr} lbs")
+            else:
+                col3.metric("Weight", f"{last_wt} lbs")
 
 
         # init session
@@ -371,6 +413,8 @@ def tab_dashboard(data: pd.DataFrame):
                 "unilateral" : unilateral,
                 "logged_at": datetime.datetime.now()
             })
+            st.session_state.log_dirty = True
+
             
             if unilateral:
                 last_weight = weight_list[-1]
@@ -382,59 +426,88 @@ def tab_dashboard(data: pd.DataFrame):
 
             # 3) save into exercise_stats under your user
             user_id = st.session_state.user["uid"]
-            slug    = slugify(ex)
-            stats_ref = db \
-                .collection("users") \
+            ex_slug = slugify(ex)
+            att_slug = slugify(attach_name) if attach_name and attach_name.lower() != "none" else "noattach"
+            combined_slug = f"{ex_slug}--{att_slug}"
+
+            stats_ref = db.collection("users") \
                 .document(user_id) \
                 .collection("exercise_stats") \
-                .document(slug)
+                .document(combined_slug)
 
             stats_ref.set({
                 "last_sets":   st.session_state.sets_count,
-                "last_reps":   last_reps,
-                "last_weight": last_weight
+                "last_reps": reps_list,
+                "last_weight": weight_list,
+                "brand": brand_name,
             }, merge=True)
 
             st.session_state.sets_count = 1
             st.success(f"Added {ex}: {st.session_state.sets_count} sets (stats updated)")
 
-        # 9) Live log + End button
+        # 9) Live log 
         if len(st.session_state.workout_log) > 1:
-            st.markdown("#### Current Workout Log")
-            header = st.columns([2, 2, 2, 1, 2, 2, 1])
-            header[0].markdown("**Brand**")
-            header[1].markdown("**Exercise**")
-            header[2].markdown("**Attachment**")
-            header[3].markdown("**Sets**")
-            header[4].markdown("**Reps**")
-            header[5].markdown("**Weight**")
-            header[6].markdown("**Remove**")
-            
+            st.markdown("#### 💪 Current Workout Log")
+
             for idx, entry in enumerate(st.session_state.workout_log[1:], start=1):
-                reps = entry["reps"]
-                if all(isinstance(r, dict) for r in reps):
-                    reps_str = "  ".join(f"{r['left']}/{r['right']}" for r in reps)
-                else:
-                    reps_str = "  ".join(str(r) for r in reps)
+                brand = entry.get("brand")
+                attachment = entry.get("attachment")
+                exercise = entry.get("exercise", "Unnamed")
+                sets = entry.get("sets", 0)
+                reps = entry.get("reps", [])
+                weights = entry.get("weights", [])
+                unilateral = entry.get("unilateral", False)
 
-                weights = entry["weights"]
-                if all(isinstance(w, dict) for w in weights):
-                    wt_str = "  ".join(f"{w['left']}/{w['right']}" for w in weights)
-                else:
-                    wt_str = "  ".join(str(w) for w in weights)
+                brand_str = f"**Brand:** {brand}" if brand else ""
+                attach_str = f"**Attachment:** {attachment}" if attachment and attachment.lower() != "none" else ""
 
-                cols = st.columns([2, 2, 2, 1, 2, 2, 1])
-                cols[0].markdown(entry.get("brand", ""))
-                cols[1].markdown(f"**{entry['exercise']}**")
-                cols[2].markdown(entry.get("attachment", ""))
-                cols[3].markdown(f"{entry['sets']} sets")
-                cols[4].markdown(reps_str)
-                cols[5].markdown(wt_str)
+                # 🚀 Start of Card
+                with st.container():
+                    st.markdown(f"### {exercise}")
+                    if brand_str:
+                        st.markdown(brand_str)
+                    if attach_str:
+                        st.markdown(attach_str)
+                    st.markdown(f"**Sets:** {sets}")
 
-                if cols[6].button("❌", key=f"remove_ex_{idx}"):
-                    st.session_state.workout_log.pop(idx)
-                    st.rerun()
+                    for s in range(sets):
+                        if s >= len(reps) or s >= len(weights):
+                            continue
 
+                        # 🧠 Unilateral handling
+                        rep = reps[s]
+                        wt = weights[s]
+
+                        if unilateral and isinstance(rep, dict) and isinstance(wt, dict):
+                            st.markdown(
+                                f"- Set {s+1}: {wt['left']} lbs / {wt['right']} lbs – "
+                                f"{rep['left']} left / {rep['right']} right"
+                            )
+                        else:
+                            rep_str = rep if isinstance(rep, (int, float)) else str(rep)
+                            wt_str = wt if isinstance(wt, (int, float)) else str(wt)
+                            st.markdown(f"- Set {s+1}: {wt_str} lbs – {rep_str} reps")
+
+                    # ❌ Remove Button
+                    if st.button("❌ Remove", key=f"remove_ex_{idx}"):
+                        st.session_state.workout_log.pop(idx)
+                        st.session_state.log_dirty = True
+                        st.rerun()
+
+                    st.markdown("---")
+
+        # 10) Save button
+        if st.session_state.get("log_dirty") and len(st.session_state.workout_log) > 1:
+            if st.button("💾 Save Workout Progress"):
+                user_ref = db.collection("users").document(st.session_state.user["uid"])
+                user_ref.update({"active_log": st.session_state.workout_log})
+                st.session_state.log_dirty = False
+                st.success("Workout log saved!")
+        if "last_save" in st.session_state:
+            st.caption(f"Last saved at {st.session_state.last_save.strftime('%I:%M %p')}")
+
+        
+        # 11) End Workout Button
         if st.button("🏁 End Workout", key="side_end"):
             user_id = st.session_state.user["uid"]
             start   = st.session_state.workout_start_time
@@ -450,35 +523,50 @@ def tab_dashboard(data: pd.DataFrame):
                   "timestamp": firestore.SERVER_TIMESTAMP
               })
             st.success("✅ Workout saved!")
+            user_ref = db.collection("users").document(user_id)
+            user_ref.update({"active_log": firestore.DELETE_FIELD})
             st.session_state.workout_started = False
             st.session_state.workout_log     = []
             st.rerun()
 
     # —————————————————————————————————————————
-    st.markdown("---")
     st.markdown("### Past Workouts")
-    user_id = st.session_state.user["uid"]
-    workouts_ref = (
-        db.collection("users")
-        .document(user_id)
-        .collection("workouts")
-    )
-    
+
+    user_ref = db.collection("users").document(st.session_state.user["uid"])
+    workouts_ref = user_ref.collection("workouts")
+
+    # Get workout docs ordered by start date
     docs = list(workouts_ref.order_by("start", direction=firestore.Query.DESCENDING).stream())
+
     if not docs:
         st.info("You haven't saved any workouts yet.")
     else:
-        # build a picklist of "Workout name (YYYY-MM-DD HH:MM)"
-        data = [d.to_dict() for d in docs]
-        for w in data:
-            if isinstance(w.get("start"), str):
-                w["start"] = datetime.datetime.fromisoformat(w["start"])
-            elif hasattr(w.get("start"), "to_datetime"):  # Firestore Timestamp
-                w["start"] = w["start"].to_datetime()
+        data = []
+        for d in docs:
+            workout = d.to_dict()
+            workout["id"] = d.id
 
+            # Convert Firestore timestamp
+            raw_start = workout.get("start")
+            if raw_start is not None:
+                if hasattr(raw_start, "to_datetime"):
+                    workout["start"] = raw_start.to_datetime()
+                elif isinstance(raw_start, datetime.datetime):
+                    workout["start"] = raw_start
+                else:
+                    st.warning(f"Could not parse start time for workout: {workout.get('title')}")
+                    workout["start"] = datetime.datetime.min
+            else:
+                workout["start"] = datetime.datetime.min
+
+            # Default fallback title
+            workout["title"] = workout.get("name", "Workout")
+            data.append(workout)
+
+        # Dropdown
         placeholder = "–– pick one ––"
         labels = [placeholder] + [
-            f"{w['start'].strftime('%Y-%m-%d')} – {w.get('title','Workout')}" for w in data
+            f"{w['start'].strftime('%Y-%m-%d')} – {w['title']}" for w in data
         ]
 
         sel = st.selectbox("Pick a past workout", labels, key="past_wkt")
@@ -486,24 +574,48 @@ def tab_dashboard(data: pd.DataFrame):
             wk_idx = labels.index(sel) - 1
             workout = data[wk_idx]
 
-            # 🔒 Validate we have 'start'
-            ts_key = workout.get("start")
-            if isinstance(ts_key, str):
-                ts_key = datetime.datetime.fromisoformat(ts_key)
-            doc_id = ts_key.isoformat()
+            with st.expander("📋 Workout Summary", expanded=True):
+                st.markdown(f"**📝 Title:** {workout['title']}")
+                st.markdown(f"**🕒 Start:** {workout['start'].strftime('%Y-%m-%d %I:%M %p')}")
 
+                st.markdown("---")
+                st.markdown("### 🏋️ Exercises")
+
+                for i, ex in enumerate(workout.get("entries", []), 1):
+                    name = ex.get("exercise", "Unnamed")
+                    sets = ex.get("sets", 0)
+                    reps = ex.get("reps", [])
+                    unilateral = ex.get("unilateral", False)
+                    brand = ex.get("brand")
+                    attachment = ex.get("attachment")
+
+                    brand_str = f" ({brand})" if brand else ""
+                    attach_str = f" – {attachment}" if attachment and attachment.lower() != "none" else ""
+
+                    # 📦 Exercise Header
+                    st.markdown(f"**{i}. {name}{brand_str}{attach_str}**")
+                    st.markdown(f"*Sets:* **{sets}**")
+
+                    # 🧱 Set-by-set Breakdown
+                    for s in range(sets):
+                        if s >= len(reps):
+                            continue
+                        rep_info = reps[s]
+
+                        if unilateral and isinstance(rep_info, dict):
+                            left = rep_info.get("left", "?")
+                            right = rep_info.get("right", "?")
+                            st.markdown(f"- Set {s+1}: {left} left / {right} right")
+                        else:
+                            st.markdown(f"- Set {s+1}: {rep_info} reps")
+
+                    st.markdown("---")
+
+            # Delete workout
             if st.button("🗑️ Delete Workout", key=f"del_workout_{wk_idx}"):
-                db.collection("users") \
-                .document(st.session_state.user["uid"]) \
-                .collection("workouts") \
-                .document(doc_id) \
-                .delete()
-                st.success("Deleted workout.")
+                workouts_ref.document(workout["id"]).delete()
+                st.success("Workout deleted.")
                 st.rerun()
-            # — end Past Workouts —
-            st.markdown("</div>", unsafe_allow_html=True)
-            st.markdown("---")
-
 
 # --- Entries Tab ---
 def tab_entries(_):
@@ -571,6 +683,9 @@ def tab_entries(_):
 # --- Graphs Tab ---
 def tab_graphs(data: pd.DataFrame):
     st.title("Insights & Calendar")
+    if st.button("🔄 Refresh Graphs"):
+        st.cache_data.clear()
+        st.rerun()
     st.markdown("---")
 
     for key in ["Weight", "Calories", "Protein", "Steps"]:
@@ -834,9 +949,31 @@ def main():
     st.sidebar.caption(f"Version {APP_VERSION}")
     st.markdown("""
         <style>
-        [data-testid="stSidebar"] {background-color:#111; padding-top:2rem;}
-        [data-testid="stSidebar"] button {background:#222; color:#fff; margin:5px 0;}
-        [data-testid="stSidebar"] button:hover {background:#BB0000;}
+            /* Sidebar styling */
+            [data-testid="stSidebar"] {
+                background-color: #111;
+                padding-top: 2rem;
+            }
+            [data-testid="stSidebar"] button {
+                background: #222;
+                color: #fff;
+                margin: 5px 0;
+            }
+            [data-testid="stSidebar"] button:hover {
+                background: #BB0000;
+            }
+
+            /* Main content mobile tweaks */
+            .block-container {
+                padding-top: 1rem;
+                padding-bottom: 1rem;
+            }
+            .element-container {
+                margin-bottom: 0.5rem;
+            }
+            p {
+                font-size: 0.95rem;
+            }
         </style>
     """, unsafe_allow_html=True)
 
@@ -853,6 +990,7 @@ def main():
         return
     # Fetch data
     data = get_entries_cached(st.session_state.user['uid'])
+    
 
     # Sidebar navigation
     nav_items = [
