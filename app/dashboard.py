@@ -1,4 +1,4 @@
-APP_VERSION = "0.54"
+APP_VERSION = "0.56"
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -374,12 +374,12 @@ def tab_dashboard(data: pd.DataFrame):
                     left_wt = cw.number_input(
                         "Left weight (lbs)", min_value=0.0,
                         value=float(st.session_state.get(f"weight_left_{i}", last_wt_left)),
-                        step=0.25, key=f"weight_left_{i}"
+                        step=2.5, key=f"weight_left_{i}"
                     )
                     right_wt = cw.number_input(
                         "Right weight (lbs)", min_value=0.0,
                         value=float(st.session_state.get(f"weight_right_{i}", last_wt_right)),
-                        step=0.25, key=f"weight_right_{i}"
+                        step=2.5, key=f"weight_right_{i}"
                     )
                     weight_list.append({"left": left_wt, "right": right_wt})
                 else:
@@ -396,7 +396,7 @@ def tab_dashboard(data: pd.DataFrame):
                     w = cw.number_input(
                         "Weight (lbs)", min_value=0.0,
                         value=float(st.session_state.get(f"weight_{i}", last_wt)),
-                        step=0.25, key=f"weight_{i}"
+                        step=2.5, key=f"weight_{i}"
                     )
                     weight_list.append(w)
 
