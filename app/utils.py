@@ -150,3 +150,58 @@ def resolve_default_wt(item: dict, fallback: float) -> float:
             return fallback
     return fallback
 
+def build_stats_key(ex_type: str, ex_name: str, brand_name: str | None, attach_name: str | None) -> str:
+    sx = slugify(ex_name or "")
+    if ex_type == "Cable":
+        sa = slugify(attach_name) if attach_name and attach_name.lower() != "none" else "noattach"
+        return f"{sx}--{sa}"
+    if ex_type in ("Machine", "Plate-loaded") and brand_name:
+        sb = slugify(brand_name)
+        return f"{sb}--{sx}"
+    return sx
+
+def load_exercise_stats(db, user_id: str, key: str, legacy_fallbacks: list[str] | None = None) -> dict:
+    ref = db.collection("users").document(user_id).collection("exercise_stats")
+    doc = ref.document(key).get()
+    if doc.exists:
+        return doc.to_dict() or {}
+    for old_key in (legacy_fallbacks or []):
+        d = ref.document(old_key).get()
+        if d.exists:
+            return d.to_dict() or {}
+    return {}
+
+def slug_variants(name: str) -> list[str]:
+    if not name:
+        return []
+    n = name.strip().lower()
+    hy = n.replace(" ", "-")
+    us = n.replace(" ", "_")
+    # also strip duplicate separators
+    return list(dict.fromkeys([hy, us]))
+
+def brand_id_from_display(display_name: str | None) -> str | None:
+    if not display_name:
+        return None
+    mapping = {b.to_dict().get("name", b.id): b.id for b in db.collection("brands").stream()}
+    return mapping.get(display_name) or mapping.get(display_name.title())
+
+def _fmt_rep(rep):
+    if isinstance(rep, dict):
+        l = rep.get("left", "?")
+        r = rep.get("right", "?")
+        return f"{l}/{r}"
+    return str(rep)
+
+def _fmt_wt(w):
+    if isinstance(w, dict):
+        l = w.get("left", default_wt)
+        r = w.get("right", default_wt)
+        # strip .0 for whole numbers
+        l = int(l) if isinstance(l, (int, float)) and float(l).is_integer() else l
+        r = int(r) if isinstance(r, (int, float)) and float(r).is_integer() else r
+        return f"{l}/{r}"
+    # strip .0 for whole numbers
+    if isinstance(w, (int, float)) and float(w).is_integer():
+        return str(int(w))
+    return str(w)

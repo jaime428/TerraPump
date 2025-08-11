@@ -15,11 +15,16 @@ from app.utils import (
     hide_sidebar,
     show_login_page,
     show_signup_page,
-    get_day_name,
     slugify,
     fetch_exercise_library,
     fetch_attachments,
-    resolve_default_wt
+    resolve_default_wt,
+    build_stats_key,
+    load_exercise_stats,
+    slug_variants,
+    brand_id_from_display,
+    _fmt_rep,
+    _fmt_wt
 )
 from app.firebase_config import db, auth
 
@@ -277,66 +282,105 @@ def tab_dashboard(data: pd.DataFrame):
             else:
                 ex = st.text_input("Exercise name", key="free_ex_name")
 
-            # 6) Stats lookup
-        if ex:
-            slug      = slugify(ex)
-            stats_doc = (
-                db.collection("users")
-                  .document(st.session_state.user["uid"])
-                  .collection("exercise_stats")
-                  .document(slug)
-                  .get()
-            )
-            stats     = stats_doc.to_dict() if stats_doc.exists else {}
+        # 6) Stats lookup
+        prev_sets = 1
+        prev_reps = 8
+        prev_wt = default_wt
+        prev_reps_left = 8
+        prev_reps_right = 8
+        prev_wt_left = default_wt
+        prev_wt_right = default_wt
+
+
+        user_id = st.session_state.user["uid"]
+        ready = False
+        if ex_type == "Cable":
+            ready = bool(ex and attach_name)             # need exercise + attachment
+        elif ex_type in ("Machine", "Plate-loaded"):
+            ready = bool(ex and brand_name)              # need machine(ex) + brand
         else:
-            stats = {}
-
-        last_sets = int(stats.get("last_sets", 1))
-        raw_last_reps = stats.get("last_reps", 8)
-        if isinstance(raw_last_reps, dict):
-            # unilateral saved as {"left":…, "right":…}
-            left, right = raw_last_reps.get("left",8), raw_last_reps.get("right",8)
-            last_reps = (left + right)//2
+            ready = bool(ex)                             # other types: just exercise
+        
+        if not ready:
+            st.info("Pick the exercise (and brand/attachment if applicable) to see previous stats.")
         else:
-            last_reps = int(raw_last_reps)
+            stats_key = build_stats_key(ex_type, ex, brand_name, attach_name)
 
-        # weight default
-        raw_last_wt = stats.get("last_weight", default_wt)
-        if isinstance(raw_last_wt, dict):
-            last_wt_left  = float(raw_last_wt.get("left",  default_wt))
-            last_wt_right = float(raw_last_wt.get("right", default_wt))
-        else:
-            # single‐value case: use it for both sides
-            last_wt_left = last_wt_right = float(raw_last_wt)
+            base_ex = slugify(ex or "")
+            legacy_keys = []
+            for ex_var in slug_variants(ex or ""):
+                # 1) plain exercise (new scheme for non-cable)
+                legacy_keys.append(ex_var)
+                # 2) old non-cable scheme often had --noattach
+                legacy_keys.append(f"{ex_var}--noattach")
 
-        last_wt = (last_wt_left + last_wt_right) / 2.0
+                if ex_type in ("Machine", "Plate-loaded"):
+                    # brand by display-name (newer)
+                    for b_var in slug_variants(brand_name or ""):
+                        legacy_keys.append(f"{b_var}--{ex_var}")
+                        legacy_keys.append(f"{b_var}--{ex_var}--noattach")
 
-        # ℹ️ Display Previous Stats
-        if stats:
-            st.markdown("##### ℹ️ Previous Stats")
-            col1, col2, col3 = st.columns(3)
-            
-            col1.metric("Sets", last_sets)
-            
-            # Show reps
-            if isinstance(raw_last_reps, dict):
-                l = raw_last_reps.get("left", "?")
-                r = raw_last_reps.get("right", "?")
-                col2.metric("Reps", f"{l} / {r}")
+                    # brand by document id (older)
+                    b_id = brand_id_from_display(brand_name)
+                    if b_id:
+                        for b_var in slug_variants(b_id):
+                            legacy_keys.append(f"{b_var}--{ex_var}")
+                            legacy_keys.append(f"{b_var}--{ex_var}--noattach")
+
+            # Make unique while preserving order
+            legacy_keys = list(dict.fromkeys([k for k in legacy_keys if k]))
+
+            stats = load_exercise_stats(db, user_id, stats_key, legacy_fallbacks=legacy_keys)
+
+        # Pull "previous" (last set only) — no averaging
+            prev_sets = int(stats.get("prev_sets", stats.get("last_sets", 1)))
+
+            raw_reps = stats.get("prev_reps", stats.get("last_reps", 8))
+            if isinstance(raw_reps, list) and raw_reps:
+                prev_reps = raw_reps[-1]
             else:
-                col2.metric("Reps", str(last_reps))
+                prev_reps = raw_reps
 
-            # Show weight
-            if isinstance(raw_last_wt, dict):
-                wl = raw_last_wt.get("left", "?")
-                wr = raw_last_wt.get("right", "?")
-                col3.metric("Weight", f"{wl} / {wr} lbs")
+            raw_wt = stats.get("prev_weight", stats.get("last_weight", default_wt))
+            if isinstance(raw_wt, list) and raw_wt:
+                prev_wt = raw_wt[-1]
             else:
-                col3.metric("Weight", f"{last_wt} lbs")
+                prev_wt = raw_wt
 
+            if isinstance(prev_reps, dict):
+                prev_reps_left = int(prev_reps.get("left", 8))
+                prev_reps_right = int(prev_reps.get("right", 8))
+            else:
+                prev_reps_left = prev_reps_right = int(prev_reps if isinstance(prev_reps, (int, float)) else 8)
 
-        # init session
-        st.session_state.setdefault("sets_count", last_sets)
+            if isinstance(prev_wt, dict):
+                prev_wt_left = float(prev_wt.get("left", default_wt))
+                prev_wt_right = float(prev_wt.get("right", default_wt))
+            else:
+                w = float(prev_wt if isinstance(prev_wt, (int, float)) else default_wt)
+                prev_wt_left = prev_wt_right = w
+
+            # ℹ️ Display Previous Stats
+            if stats:
+                all_sets    = int(stats.get("prev_sets", stats.get("last_sets", 1)))
+                all_reps    = stats.get("prev_reps",  stats.get("last_reps",  []))
+                all_weights = stats.get("prev_weight", stats.get("last_weight", []))
+
+                # normalize to lists
+                if not isinstance(all_reps, list):
+                    all_reps = [all_reps]
+                if not isinstance(all_weights, list):
+                    all_weights = [all_weights]
+
+                # formatters for unilateral dictionaries
+                reps_str    = ", ".join(_fmt_rep(r) for r in all_reps)
+                weights_str = ", ".join(_fmt_wt(w) for w in all_weights)
+
+                st.markdown("##### ℹ️ Previous Stats")
+                st.write(f"**Sets:** {all_sets}   \n**Reps:** {reps_str}   \n**Weight:** {weights_str} lbs")
+
+            # init session sets default from previous
+            st.session_state.setdefault("sets_count", prev_sets)
             
         # 7) Add / Remove Set controls (outside the form)
         c1, c2 = st.columns([1,1])
@@ -358,14 +402,14 @@ def tab_dashboard(data: pd.DataFrame):
                     left_reps = sr.number_input(
                         "Left reps", 
                         min_value=1,
-                        value=int(st.session_state.get(f"reps_left_{i}", last_reps)),
+                        value=int(st.session_state.get(f"reps_left_{i}", prev_reps_left)),
                         step=1,
                         key=f"reps_left_{i}"
                     )
                     right_reps = sr.number_input(
                         "Right reps", 
                         min_value=1,
-                        value=int(st.session_state.get(f"reps_right_{i}", last_reps)),
+                        value=int(st.session_state.get(f"reps_right_{i}", prev_reps_right)),
                         step=1, 
                         key=f"reps_right_{i}"
                     )
@@ -373,17 +417,17 @@ def tab_dashboard(data: pd.DataFrame):
                     reps_list.append({"left": left_reps, "right": right_reps})
                     left_wt = cw.number_input(
                         "Left weight (lbs)", min_value=0.0,
-                        value=float(st.session_state.get(f"weight_left_{i}", last_wt_left)),
+                        value=float(st.session_state.get(f"weight_left_{i}", prev_wt_left)),
                         step=2.5, key=f"weight_left_{i}"
                     )
                     right_wt = cw.number_input(
                         "Right weight (lbs)", min_value=0.0,
-                        value=float(st.session_state.get(f"weight_right_{i}", last_wt_right)),
+                        value=float(st.session_state.get(f"weight_right_{i}", prev_wt_right)),
                         step=2.5, key=f"weight_right_{i}"
                     )
                     weight_list.append({"left": left_wt, "right": right_wt})
                 else:
-                    default_r = st.session_state.get(f"reps_{i}", last_reps)
+                    default_r = st.session_state.get(f"reps_{i}", prev_reps)
                     r = sr.number_input(
                         "Reps", 
                         min_value=1,
@@ -395,7 +439,7 @@ def tab_dashboard(data: pd.DataFrame):
 
                     w = cw.number_input(
                         "Weight (lbs)", min_value=0.0,
-                        value=float(st.session_state.get(f"weight_{i}", last_wt)),
+                        value=float(st.session_state.get(f"weight_{i}", prev_wt)),
                         step=2.5, key=f"weight_{i}"
                     )
                     weight_list.append(w)
@@ -426,9 +470,16 @@ def tab_dashboard(data: pd.DataFrame):
 
             # 3) save into exercise_stats under your user
             user_id = st.session_state.user["uid"]
-            ex_slug = slugify(ex)
-            att_slug = slugify(attach_name) if attach_name and attach_name.lower() != "none" else "noattach"
-            combined_slug = f"{ex_slug}--{att_slug}"
+            if ex_type == "Cable":
+                ex_slug = slugify(ex)
+                att_slug = slugify(attach_name) if attach_name and attach_name.lower() != "none" else "noattach"
+                combined_slug = f"{ex_slug}--{att_slug}"
+            elif ex_type in ("Machine", "Plate-loaded") and brand_name:
+                brand_slug = slugify(brand_name)
+                machine_slug = slugify(ex)
+                combined_slug = f"{brand_slug}--{machine_slug}"
+            else:
+                combined_slug = slugify(ex)
 
             stats_ref = db.collection("users") \
                 .document(user_id) \
@@ -436,10 +487,12 @@ def tab_dashboard(data: pd.DataFrame):
                 .document(combined_slug)
 
             stats_ref.set({
-                "last_sets":   st.session_state.sets_count,
-                "last_reps": reps_list,
-                "last_weight": weight_list,
+                "prev_sets":   st.session_state.sets_count,
+                "prev_reps": reps_list,
+                "prev_weight": weight_list,
                 "brand": brand_name,
+                "attachment": attach_name,
+                "updated_at": firestore.SERVER_TIMESTAMP
             }, merge=True)
 
             st.session_state.sets_count = 1
