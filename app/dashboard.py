@@ -1,4 +1,4 @@
-APP_VERSION = "0.56"
+APP_VERSION = "0.57"
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -374,7 +374,7 @@ def tab_dashboard(data: pd.DataFrame):
 
                 # formatters for unilateral dictionaries
                 reps_str    = ", ".join(_fmt_rep(r) for r in all_reps)
-                weights_str = ", ".join(_fmt_wt(w) for w in all_weights)
+                weights_str = ", ".join(_fmt_wt(w, default_wt) for w in all_weights or [])
 
                 st.markdown("##### ℹ️ Previous Stats")
                 st.write(f"**Sets:** {all_sets}   \n**Reps:** {reps_str}   \n**Weight:** {weights_str} lbs")

@@ -193,7 +193,7 @@ def _fmt_rep(rep):
         return f"{l}/{r}"
     return str(rep)
 
-def _fmt_wt(w):
+def _fmt_wt(w, default_wt=None):
     if isinstance(w, dict):
         l = w.get("left", default_wt)
         r = w.get("right", default_wt)
